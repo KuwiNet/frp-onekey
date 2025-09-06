@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.0.6"
+version="1.0.7"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -245,10 +245,12 @@ fun_getServer(){
     echo    "-----------------------------------"
 }
 fun_getVer(){
-    echo -e "正在加载网络版本 ${program_name}, 请稍等..."
-    # 若 choice 为空，默认 GitHub
-    : ${choice:=2}
+    # 1. 选源（若已安装过，update 流程里需先调用 fun_getServer）
+    : ${choice:=2}               # 空则默认 GitHub
+    fun_getServer                # 交互选 1/2，更新 choice
 
+    # 2. 取线上最新 tag
+    echo -e "正在加载网络版本 ${program_name}, 请稍等..."
     local tmp_json
     case $choice in
         1)  tmp_json=$(curl -s "${gitee_latest_version_api}");;
@@ -260,13 +262,17 @@ fun_getVer(){
         2)  LATEST_RELEASE=$(echo "$tmp_json" | grep '"tag_name":' | cut -d '"' -f 4 | cut -c 2-);;
     esac
 
-    # 网络失败时兜底
+    # 3. 兜底 + 二次确认 / 手动改
     [[ -z "$LATEST_RELEASE" ]] && LATEST_RELEASE="0.64.0"
+    echo -e "网络最新版本：${COLOR_GREEN}${LATEST_RELEASE}${COLOR_END}"
+    read -e -p "回车直接使用，或输入自定义版本 (如 0.63.0): " input_ver
+    [[ -n "$input_ver" ]] && LATEST_RELEASE="$input_ver"
 
+    # 4. 落盘
     FRPS_VER="$LATEST_RELEASE"
     program_latest_filename="frp_${FRPS_VER}_linux_${ARCHS}.tar.gz"
     program_latest_file_url="${program_download_url}/v${FRPS_VER}/${program_latest_filename}"
-    echo -e "${program_name} 最新发布文件 ${COLOR_GREEN}${program_latest_filename}${COLOR_END}"
+    echo -e "${program_name} 即将下载 ${COLOR_GREEN}${program_latest_filename}${COLOR_END}"
 }
 fun_download_file(){
     # 下载
