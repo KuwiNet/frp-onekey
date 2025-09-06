@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.0.7"
+version="1.0.8"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -247,7 +247,6 @@ fun_getServer(){
 fun_getVer(){
     # 1. 选源（若已安装过，update 流程里需先调用 fun_getServer）
     : ${choice:=2}               # 空则默认 GitHub
-    fun_getServer                # 交互选 1/2，更新 choice
 
     # 2. 取线上最新 tag
     echo -e "正在加载网络版本 ${program_name}, 请稍等..."
