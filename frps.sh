@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.1.1"
+version="1.1.2"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -262,9 +262,9 @@ fun_getVer(){
     esac
 
     # 3. 兜底 + 二次确认 / 手动改
-    [[ -z "$LATEST_RELEASE" ]] && LATEST_RELEASE="0.63.0"
+    [[ -z "$LATEST_RELEASE" ]] && LATEST_RELEASE="0.64.0"
     echo -e "网络最新版本：${COLOR_GREEN}${LATEST_RELEASE}${COLOR_END}"
-    read -e -p "回车直接使用，或输入自定义版本 (如 0.63.0): " input_ver
+    read -e -p "回车直接使用或输入自定义版本 (如 0.64.0): " input_ver
     [[ -n "$input_ver" ]] && LATEST_RELEASE="$input_ver"
 
     # 4. 落盘
