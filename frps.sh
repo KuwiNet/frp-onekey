@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.0.8"
+version="1.1.0"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -262,7 +262,7 @@ fun_getVer(){
     esac
 
     # 3. 兜底 + 二次确认 / 手动改
-    [[ -z "$LATEST_RELEASE" ]] && LATEST_RELEASE="0.64.0"
+    [[ -z "$LATEST_RELEASE" ]] && LATEST_RELEASE="0.63.0"
     echo -e "网络最新版本：${COLOR_GREEN}${LATEST_RELEASE}${COLOR_END}"
     read -e -p "回车直接使用，或输入自定义版本 (如 0.63.0): " input_ver
     [[ -n "$input_ver" ]] && LATEST_RELEASE="$input_ver"
@@ -1140,8 +1140,6 @@ update_program_server_frps() {
 
         [ ! -d "$str_program_dir" ] && mkdir -p "$str_program_dir"
         echo -e "正在下载 $program_name 远程版本, 请等待..."
-        fun_getServer
-        fun_getVer >/dev/null 2>&1
         local_program_version="$($str_program_dir/$program_name --version)"
         echo -e "${COLOR_GREEN}$program_name 本地版本 $local_program_version${COLOR_END}"
         echo -e "${COLOR_GREEN}$program_name 远程版本 $FRPS_VER${COLOR_END}"
