@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.0.5"
+version="1.0.6"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -246,7 +246,7 @@ fun_getServer(){
 }
 fun_getVer(){
     echo -e "正在加载网络版本 ${program_name}, 请稍等..."
-    # 如果 choice 为空，默认用 GitHub
+    # 若 choice 为空，默认 GitHub
     : ${choice:=2}
 
     local tmp_json
@@ -255,22 +255,13 @@ fun_getVer(){
         2)  tmp_json=$(curl -s "${github_latest_version_api}");;
     esac
 
-    echo "----DEBUG raw json----" >&2
-    echo "$tmp_json" >&2
-    echo "----DEBUG end---------" >&2
-
     case $choice in
         1)  LATEST_RELEASE=$(echo "$tmp_json" | grep -oP '"tag_name":"\Kv[^"]+' | cut -c2-);;
         2)  LATEST_RELEASE=$(echo "$tmp_json" | grep '"tag_name":' | cut -d '"' -f 4 | cut -c 2-);;
     esac
 
-    echo "DEBUG: LATEST_RELEASE=[$LATEST_RELEASE]" >&2
-
-    # 仍然为空就硬编码
-    if [[ -z "$LATEST_RELEASE" ]]; then
-        echo "网络获取失败，使用内置版本号 0.61.1" >&2
-        LATEST_RELEASE="0.61.1"
-    fi
+    # 网络失败时兜底
+    [[ -z "$LATEST_RELEASE" ]] && LATEST_RELEASE="0.64.0"
 
     FRPS_VER="$LATEST_RELEASE"
     program_latest_filename="frp_${FRPS_VER}_linux_${ARCHS}.tar.gz"
@@ -1106,7 +1097,9 @@ update_program_server_frps() {
 
     if [ -s "$program_init" ] || [ -s "$str_program_dir/$program_name" ]; then
         echo "============== 更新 $program_name =============="
-        
+
+		fun_getServer
+  
         # 询问是否更新配置文件
         echo -n -e "${COLOR_YELOW}是否更新配置文件？${COLOR_END} [y/N]: "
         read -r update_config_choice
