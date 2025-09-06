@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.0.4"
+version="1.0.5"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -246,13 +246,15 @@ fun_getServer(){
 }
 fun_getVer(){
     echo -e "正在加载网络版本 ${program_name}, 请稍等..."
+    # 如果 choice 为空，默认用 GitHub
+    : ${choice:=2}
+
     local tmp_json
     case $choice in
         1)  tmp_json=$(curl -s "${gitee_latest_version_api}");;
         2)  tmp_json=$(curl -s "${github_latest_version_api}");;
     esac
 
-    # 调试用：把原始 json 打到日志
     echo "----DEBUG raw json----" >&2
     echo "$tmp_json" >&2
     echo "----DEBUG end---------" >&2
@@ -264,20 +266,16 @@ fun_getVer(){
 
     echo "DEBUG: LATEST_RELEASE=[$LATEST_RELEASE]" >&2
 
-    if [[ -n "$LATEST_RELEASE" ]]; then
-        FRPS_VER="$LATEST_RELEASE"
-        echo "设置 FRPS 版本: $FRPS_VER"
-    else
-        echo "无法检索最新版本。"
+    # 仍然为空就硬编码
+    if [[ -z "$LATEST_RELEASE" ]]; then
+        echo "网络获取失败，使用内置版本号 0.61.1" >&2
+        LATEST_RELEASE="0.61.1"
     fi
 
+    FRPS_VER="$LATEST_RELEASE"
     program_latest_filename="frp_${FRPS_VER}_linux_${ARCHS}.tar.gz"
     program_latest_file_url="${program_download_url}/v${FRPS_VER}/${program_latest_filename}"
-    if [[ -z "$FRPS_VER" ]]; then
-        echo -e "${COLOR_RED}加载网络版本失败！！！${COLOR_END}"
-    else
-        echo -e "${program_name} 最新发布文件 ${COLOR_GREEN}${program_latest_filename}${COLOR_END}"
-    fi
+    echo -e "${program_name} 最新发布文件 ${COLOR_GREEN}${program_latest_filename}${COLOR_END}"
 }
 fun_download_file(){
     # 下载
