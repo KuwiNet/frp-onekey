@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.0.3"
+version="1.0.4"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -246,19 +246,34 @@ fun_getServer(){
 }
 fun_getVer(){
     echo -e "正在加载网络版本 ${program_name}, 请稍等..."
+    local tmp_json
     case $choice in
-        1)  LATEST_RELEASE=$(curl -s ${github_latest_version_api} | grep '"tag_name":' | cut -d '"' -f 4 | cut -c 2-);;
-		2)  LATEST_RELEASE=$(curl -s ${gitee_latest_version_api} | grep -oP '"tag_name":"\Kv[^"]+' | cut -c2-);;
+        1)  tmp_json=$(curl -s "${gitee_latest_version_api}");;
+        2)  tmp_json=$(curl -s "${github_latest_version_api}");;
     esac
-    if [[ ! -z "$LATEST_RELEASE" ]]; then
+
+    # 调试用：把原始 json 打到日志
+    echo "----DEBUG raw json----" >&2
+    echo "$tmp_json" >&2
+    echo "----DEBUG end---------" >&2
+
+    case $choice in
+        1)  LATEST_RELEASE=$(echo "$tmp_json" | grep -oP '"tag_name":"\Kv[^"]+' | cut -c2-);;
+        2)  LATEST_RELEASE=$(echo "$tmp_json" | grep '"tag_name":' | cut -d '"' -f 4 | cut -c 2-);;
+    esac
+
+    echo "DEBUG: LATEST_RELEASE=[$LATEST_RELEASE]" >&2
+
+    if [[ -n "$LATEST_RELEASE" ]]; then
         FRPS_VER="$LATEST_RELEASE"
         echo "设置 FRPS 版本: $FRPS_VER"
     else
         echo "无法检索最新版本。"
     fi
+
     program_latest_filename="frp_${FRPS_VER}_linux_${ARCHS}.tar.gz"
     program_latest_file_url="${program_download_url}/v${FRPS_VER}/${program_latest_filename}"
-    if [ -z "${program_latest_filename}" ]; then
+    if [[ -z "$FRPS_VER" ]]; then
         echo -e "${COLOR_RED}加载网络版本失败！！！${COLOR_END}"
     else
         echo -e "${program_name} 最新发布文件 ${COLOR_GREEN}${program_latest_filename}${COLOR_END}"
