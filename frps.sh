@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.0.1"
+version="1.0.2"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -1093,7 +1093,19 @@ update_program_server_frps() {
 
     if [ -s "$program_init" ] || [ -s "$str_program_dir/$program_name" ]; then
         echo "============== 更新 $program_name =============="
-        update_config_frps
+        
+        # 询问是否更新配置文件
+        echo -n -e "${COLOR_YELOW}是否更新配置文件？${COLOR_END} [y/N]: "
+        read -r update_config_choice
+        case "$update_config_choice" in
+            [yY]|[yY][eE][sS])
+                update_config_frps
+                ;;
+            *)
+                echo "跳过配置文件更新。"
+                ;;
+        esac
+		
         checkos
         check_os_version
         check_os_bit
