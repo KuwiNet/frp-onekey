@@ -27,14 +27,44 @@ shell_update() {
     # 清除终端
     fun_frps "clear"
 
+    # 初始化文本颜色（避免颜色变量未定义）
+    fun_set_text_color
+
     # 回显一条消息以表明我们正在检查 shell 更新
     echo "正在检查脚本更新..."
 
-    # 从指定 URL 获取远程 shell 版本
-    remote_shell_version=$(wget --no-check-certificate -qO- "${str_install_shell}" | sed -n '/^version/p' | cut -d'"' -f2)
+    # ========== 修复点1：优化远程版本获取（增加容错+明确URL） ==========
+    local remote_shell_version=""
+    # 重试机制 + 跳过证书检查（适配不同环境）
+    for i in {1..3}; do
+        remote_shell_version=$(wget --no-check-certificate --timeout=10 -qO- "${str_install_shell}" 2>/dev/null | 
+                               sed -n '/^version="/p' | cut -d'"' -f2)
+        if [ -n "${remote_shell_version}" ]; then
+            break
+        fi
+        echo "第 ${i} 次获取远程版本失败，重试中..."
+        sleep 1
+    done
+
+    # 远程版本获取失败的容错
+    if [ -z "${remote_shell_version}" ]; then
+        echo -e "${COLOR_YELOW}警告：无法获取远程脚本版本，跳过更新检测${COLOR_END}"
+        return
+    fi
+
+    # ========== 修复点2：规范语义化版本对比（替换简单字符串对比） ==========
+    # 定义版本对比函数（处理 x.y.z 格式的语义化版本）
+    version_less_than() {
+        local ver1=$1
+        local ver2=$2
+        # 转换为数字段对比（如 1.1.7 → 1001007）
+        local ver1_num=$(echo "$ver1" | awk -F. '{printf "%03d%03d%03d", $1,$2,$3}')
+        local ver2_num=$(echo "$ver2" | awk -F. '{printf "%03d%03d%03d", $1,$2,$3}')
+        [ "$ver1_num" -lt "$ver2_num" ]
+    }
 
     # 检查本地版本是否低于远程版本
-    if [[ "${version}" < "${remote_shell_version}" ]]; then
+    if version_less_than "${version}" "${remote_shell_version}"; then
         # 回显一条消息以表明已找到新版本
         echo -e "${COLOR_YELOW}发现了新版本！${COLOR_END}"
         echo
@@ -51,20 +81,26 @@ shell_update() {
             # 回显一条消息以表明我们正在更新 shell
             echo -n "正在更新脚本..."
 
-            # 尝试下载新版本并覆盖当前脚本
-            if ! wget --no-check-certificate -qO "$0" "${str_install_shell}"; then
-                # 回显一条消息以表明更新失败
+            # ========== 修复点3：优化脚本下载逻辑（备份原脚本+容错） ==========
+            # 备份原脚本
+            cp -f "$0" "${0}.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null
+            # 下载新版本并覆盖当前脚本
+            if ! wget --no-check-certificate --timeout=10 -qO "$0" "${str_install_shell}"; then
+                # 回显一条消息以表明更新失败（恢复备份）
                 echo -e " [${COLOR_RED}更新失败${COLOR_END}]"
+                cp -f "${0}.bak.$(date +%Y%m%d%H%M%S)" "$0" 2>/dev/null
                 echo
-                exit 1
+                return
             else
+                # 恢复执行权限
+                chmod +x "$0"
                 # 回显消息以表明更新成功
                 echo -e " [${COLOR_GREEN}更新成功${COLOR_END}]"
                 echo
                 # 回显一条消息以指示用户重新运行脚本
-                echo -e "${COLOR_GREEN}请重新运行${COLOR_END} ${COLOR_PINK}$0 ${frps_action}${COLOR_END}"
+                echo -e "${COLOR_GREEN}请重新运行${COLOR_END} ${COLOR_PINK}$0 ${frps_action:-}${COLOR_END}"
                 echo
-                exit 1
+                exit 0
             fi
         else
             # 如果用户选择不更新，则继续执行脚本
