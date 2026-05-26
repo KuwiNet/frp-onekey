@@ -34,19 +34,23 @@ shell_update() {
     remote_shell_version=$(wget --no-check-certificate -qO- "${str_install_shell}" | sed -n '/^version/p' | cut -d'"' -f2)
 
 	# 检查本地版本是否低于远程版本
-	if [[ "${version}" < "${remote_shell_version}" ]]; then
-	# 回显一条消息以表明已找到新版本
-	echo -e "${COLOR_YELOW}发现了新版本！${COLOR_END}"
-	echo
-	# 回显本地和远程版本
-	echo -e "${COLOR_BLUE}本地版本： ${version}${COLOR_END}"
-	echo -e "${COLOR_GREEN}远程版本： ${remote_shell_version}${COLOR_END}"
-	echo
-	# 询问用户是否需要更新
-	read -p "更新最新的脚本版本？ [y/n] " -n 1 -r
-	echo
-	if [[ $REPLY =~ ^[Yy]$ ]]; then
-	echo
+    if [[ "${version}" < "${remote_shell_version}" ]]; then
+    # 回显一条消息以表明已找到新版本
+    echo -e "${COLOR_YELOW}发现了新版本！${COLOR_END}"
+    echo
+    # 回显本地和远程版本
+    echo -e "${COLOR_BLUE}本地版本： ${version}${COLOR_END}"
+    echo -e "${COLOR_GREEN}远程版本： ${remote_shell_version}${COLOR_END}"
+    echo
+    # 询问用户是否需要更新 → 直接回车默认【更新】
+    read -p "更新最新的脚本版本？ [Y/n] " -n 1 -r
+    echo
+    # 空输入（回车）默认赋值为 Y
+    REPLY=${REPLY:-Y}
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        :
+    fi
+    fi
 
 	# 回显一条消息以表明我们正在更新 shell
 	echo -n "正在更新脚本..."
