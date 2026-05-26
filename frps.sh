@@ -33,49 +33,48 @@ shell_update() {
     # 从指定 URL 获取远程 shell 版本
     remote_shell_version=$(wget --no-check-certificate -qO- "${str_install_shell}" | sed -n '/^version/p' | cut -d'"' -f2)
 
-	# 检查本地版本是否低于远程版本
+    # 检查本地版本是否低于远程版本
     if [[ "${version}" < "${remote_shell_version}" ]]; then
-    # 回显一条消息以表明已找到新版本
-    echo -e "${COLOR_YELOW}发现了新版本！${COLOR_END}"
-    echo
-    # 回显本地和远程版本
-    echo -e "${COLOR_BLUE}本地版本： ${version}${COLOR_END}"
-    echo -e "${COLOR_GREEN}远程版本： ${remote_shell_version}${COLOR_END}"
-    echo
-    # 询问用户是否需要更新 → 直接回车默认【更新】
-    read -p "更新最新的脚本版本？ [Y/n] " -n 1 -r
-    echo
-    # 空输入（回车）默认赋值为 Y
-    REPLY=${REPLY:-Y}
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        :
-    fi
-    fi
+        # 回显一条消息以表明已找到新版本
+        echo -e "${COLOR_YELOW}发现了新版本！${COLOR_END}"
+        echo
+        # 回显本地和远程版本
+        echo -e "${COLOR_BLUE}本地版本： ${version}${COLOR_END}"
+        echo -e "${COLOR_GREEN}远程版本： ${remote_shell_version}${COLOR_END}"
+        echo
+        # 询问用户是否需要更新 → 直接回车默认【更新】
+        read -p "更新最新的脚本版本？ [Y/n] 默认“Y” " -n 1 -r
+        echo
+        # 空输入（回车）默认赋值为 Y
+        REPLY=${REPLY:-Y}
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            # 回显一条消息以表明我们正在更新 shell
+            echo -n "正在更新脚本..."
 
-	# 回显一条消息以表明我们正在更新 shell
-	echo -n "正在更新脚本..."
-
-	# 尝试下载新版本并覆盖当前脚本
-	if ! wget --no-check-certificate -qO "$0" "${str_install_shell}"; then
-		# 回显一条消息以表明更新失败
-		echo -e " [${COLOR_RED}更新失败${COLOR_END}]"
-		echo
-		exit 1
-	else
-		# 回显消息以表明更新成功
-		echo -e " [${COLOR_GREEN}更新成功${COLOR_END}]"
-		echo
-		# 回显一条消息以指示用户重新运行脚本
-		echo -e "${COLOR_GREEN}请重新运行${COLOR_END} ${COLOR_PINK}$0 ${frps_action}${COLOR_END}"
-		echo
-		exit 1
-	fi
+            # 尝试下载新版本并覆盖当前脚本
+            if ! wget --no-check-certificate -qO "$0" "${str_install_shell}"; then
+                # 回显一条消息以表明更新失败
+                echo -e " [${COLOR_RED}更新失败${COLOR_END}]"
+                echo
+                exit 1
+            else
+                # 回显消息以表明更新成功
+                echo -e " [${COLOR_GREEN}更新成功${COLOR_END}]"
+                echo
+                # 回显一条消息以指示用户重新运行脚本
+                echo -e "${COLOR_GREEN}请重新运行${COLOR_END} ${COLOR_PINK}$0 ${frps_action}${COLOR_END}"
+                echo
+                exit 1
+            fi
+        else
+            # 如果用户选择不更新，则继续执行脚本
+            echo
+            echo -e "${COLOR_YELOW}继续当前脚本...${COLOR_END}"
+        fi
     else
-	# 如果用户选择不更新，则继续执行脚本
-	    echo
-	    echo -e "${COLOR_YELOW}继续当前脚本...${COLOR_END}"
-	fi
-fi
+        # 本地版本不低于远程版本，无需更新
+        echo -e "${COLOR_GREEN}当前脚本已是最新版本，无需更新${COLOR_END}"
+    fi
 }
 fun_frps(){
     local clear_flag=""
