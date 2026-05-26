@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.1.9"
+version="1.1.10"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -73,7 +73,7 @@ shell_update() {
         echo -e "${COLOR_GREEN}远程版本： ${remote_shell_version}${COLOR_END}"
         echo
         # 询问用户是否需要更新 → 直接回车默认【更新】
-        read -p "更新最新的脚本版本？ [Y/n] 默认“Y” " -n 1 -r
+        read -p "更新最新的脚本版本？ [Y/n] 默认[Y]: " -n 1 -r
         echo
         # 空输入（回车）默认赋值为 Y
         REPLY=${REPLY:-Y}
@@ -539,7 +539,7 @@ else
     echo -e "${COLOR_YELOW}${program_name} 没有运行或没有安装。${COLOR_END}"
     echo ""
     # ========== 核心修改：添加默认 Y 的逻辑 ==========
-    read -p "是否需要安装 ${program_name}? (Y/n) 默认【Y】 " -n 1 -r
+    read -p "是否需要安装 ${program_name}? (Y/n) 默认[Y]: " -n 1 -r
     echo ""  # 换行
     REPLY=${REPLY:-Y}  # 空输入默认赋值为 Y
     case "$REPLY" in
@@ -1144,7 +1144,7 @@ update_program_server_frps() {
     if [ -s "$program_init" ] || [ -s "$str_program_dir/$program_name" ]; then
         echo "============== 更新 $program_name =============="
         # 询问是否更新配置文件
-        echo -n -e "${COLOR_YELOW}是否更新配置文件？${COLOR_END} [y/N] (默认“N”): "
+        echo -n -e "${COLOR_YELOW}是否更新配置文件？${COLOR_END} [y/N] 默认[N]: "
         read -r update_config_choice
 		update_config_choice=${update_config_choice:-n}
         case "$update_config_choice" in
