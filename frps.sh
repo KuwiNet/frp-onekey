@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.1.2"
+version="1.1.3"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -262,9 +262,9 @@ fun_getVer(){
     esac
 
     # 3. 兜底 + 二次确认 / 手动改
-    [[ -z "$LATEST_RELEASE" ]] && LATEST_RELEASE="0.64.0"
+    [[ -z "$LATEST_RELEASE" ]] && LATEST_RELEASE="0.69.0"
     echo -e "网络最新版本：${COLOR_GREEN}${LATEST_RELEASE}${COLOR_END}"
-    read -e -p "回车直接使用或输入自定义版本 (如 0.64.0): " input_ver
+    read -e -p "回车直接使用或输入自定义版本 (如 0.69.0): " input_ver
     [[ -n "$input_ver" ]] && LATEST_RELEASE="$input_ver"
 
     # 4. 落盘
@@ -1103,8 +1103,9 @@ update_program_server_frps() {
     if [ -s "$program_init" ] || [ -s "$str_program_dir/$program_name" ]; then
         echo "============== 更新 $program_name =============="
         # 询问是否更新配置文件
-        echo -n -e "${COLOR_YELOW}是否更新配置文件？${COLOR_END} [y/n]: "
+        echo -n -e "${COLOR_YELOW}是否更新配置文件？${COLOR_END} [y/N] (默认“N”): "
         read -r update_config_choice
+		update_config_choice=${update_config_choice:-n}
         case "$update_config_choice" in
             [yY]|[yY][eE][sS])
                 update_config_frps
