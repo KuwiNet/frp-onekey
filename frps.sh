@@ -15,7 +15,7 @@ export github_latest_version_api="https://api.github.com/repos/fatedier/frp/rele
 
 # 项目信息
 program_name="frps"
-version="1.1.8"
+version="1.1.9"
 str_program_dir="/usr/local/${program_name}"
 program_init="/etc/init.d/${program_name}"
 program_config_file="frps.toml"
@@ -538,11 +538,13 @@ pre_install_frps(){
 else
     echo -e "${COLOR_YELOW}${program_name} 没有运行或没有安装。${COLOR_END}"
     echo ""
-    read -p "是否要重新安装 ${program_name}? (y/n) " choice
-	echo ""
-    case "$choice" in
+    # ========== 核心修改：添加默认 Y 的逻辑 ==========
+    read -p "是否需要安装 ${program_name}? (Y/n) 默认【Y】 " -n 1 -r
+    echo ""  # 换行
+    REPLY=${REPLY:-Y}  # 空输入默认赋值为 Y
+    case "$REPLY" in
       y|Y)
-        echo -e "${COLOR_GREEN} 重新安装 ${program_name}...${COLOR_END}"
+        echo -e "${COLOR_GREEN} 安装 ${program_name}...${COLOR_END}"
         ;;
       n|N)
         echo -e "${COLOR_YELOW} 跳过安装。${COLOR_END}"
@@ -550,9 +552,9 @@ else
 		exit 1
         ;;
       *)
-        echo -e "${COLOR_YELOW}选择无效，跳过安装。 ${COLOR_END}"
-		echo ""
-		exit 1
+        echo -e "${COLOR_YELOW}选择无效，默认执行安装... ${COLOR_END}"
+        # 非 y/n 输入也默认执行安装
+        echo -e "${COLOR_GREEN} 安装 ${program_name}...${COLOR_END}"
         ;;
     esac
         clear
