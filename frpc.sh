@@ -1,12 +1,12 @@
 #!/bin/sh
 # OpenWrt frpc onekey install script
 # Repo: https://github.com/KuwiNet/frp-onekey/tree/openwrt
-# ScriptVersion=1.7.0
+# ScriptVersion=1.7.3
 # Frp install dir: /root/frp
 # Service: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="1.7.0"
+SCRIPT_VERSION="1.7.3"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -383,19 +383,24 @@ action_install() {
     # 判断是否已经安装frpc二进制
     if [ -f "${FRPC_BIN}" ]; then
         echo "✅ 检测到已存在frpc二进制文件"
-        # 修复版本提取：匹配 v0.71.0 这类版本号
-        CURRENT_FRPC_VER=$(${FRPC_BIN} --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | sed 's/v//')
-        if [ -z "${CURRENT_FRPC_VER}" ]; then
-            echo "⚠️ 无法读取本地frpc版本号"
+        # 直接使用 --version，新版frp输出纯版本号
+        VER_OUT=$(${FRPC_BIN} --version 2>/dev/null)
+        CURRENT_FRPC_VER=$(echo "$VER_OUT" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+$')
+        if [ -z "$CURRENT_FRPC_VER" ]; then
+            CURRENT_FRPC_VER="unknown"
+            echo "本地frpc版本: unknown（无法解析版本号）"
         else
             echo "本地frpc版本: v${CURRENT_FRPC_VER}"
         fi
         echo "线上最新frp版本: v${LATEST_FRPC_VER}"
 
-        # 版本对比
-        if [ "${CURRENT_FRPC_VER}" = "${LATEST_FRPC_VER}" ]; then
+        # 版本对比逻辑：unknown 直接提示更新
+        if [ "$CURRENT_FRPC_VER" != "unknown" ] && [ "${CURRENT_FRPC_VER}" = "${LATEST_FRPC_VER}" ]; then
             echo "✅ 当前frpc已经是最新版本，跳过二进制下载"
         else
+            if [ "$CURRENT_FRPC_VER" = "unknown" ]; then
+                echo "⚠️ 本地版本无法识别，对比失效，将询问是否升级"
+            fi
             read -p "发现新版本frpc，是否升级frpc二进制？[Y/n] " upgrade_ans
             upgrade_ans=${upgrade_ans:-Y}
             if [ "$upgrade_ans" = "y" ] || [ "$upgrade_ans" = "Y" ]; then
