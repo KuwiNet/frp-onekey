@@ -1,11 +1,11 @@
 #!/bin/bash
 # Linux systemd frpc onekey install script
-# ScriptVersion=2.0.0
+# ScriptVersion=2.0.2
 # Install dir: /opt/frp
 # Systemd service: /etc/systemd/system/frpc.service
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="2.0.0"
+SCRIPT_VERSION="2.0.2"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/opt/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -17,7 +17,7 @@ BIN_LINK="/usr/local/bin/frpc"
 check_and_install_deps() {
     echo "==> 检查系统依赖工具..."
     NEED=""
-    if ! command -v tar &>/dev/null; then
+    if ! command -v tar &>/dev/null;then
         echo "⚠️ 缺失 tar"
         NEED="${NEED} tar"
     fi
@@ -48,16 +48,34 @@ check_and_install_deps() {
     fi
 }
 
-# 脚本自身版本检测更新
+# 脚本自身版本检测更新：优先github raw，失败自动降级gitee国内镜像
 check_script_update() {
     echo "==> 检查脚本版本更新..."
-    REMOTE_RAW_URL="https://raw.githubusercontent.com/KuwiNet/frp-onekey/openwrt/frpc.sh"
+    GITHUB_RAW="https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh"
+    GITEE_RAW="https://shturl.cc/TBZFMWpdM0D-onekey/raw/master/frpc.sh"
+    REMOTE_RAW_URL=""
     REMOTE_VER=""
+
+    # 先尝试github源
     if command -v curl &>/dev/null;then
-        REMOTE_VER=$(curl -sL ${REMOTE_RAW_URL} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+        REMOTE_VER=$(curl -sL -m 8 ${GITHUB_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
     elif command -v wget &>/dev/null;then
-        REMOTE_VER=$(wget -qO- ${REMOTE_RAW_URL} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+        REMOTE_VER=$(wget -q -T 8 -O- ${GITHUB_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
     fi
+
+    if [[ -n "${REMOTE_VER}" ]];then
+        REMOTE_RAW_URL="${GITHUB_RAW}"
+    else
+        echo "⚠️ GitHub raw访问失败，尝试切换Gitee国内镜像源"
+        # 降级gitee
+        if command -v curl &>/dev/null;then
+            REMOTE_VER=$(curl -sL -m 8 ${GITEE_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+        elif command -v wget &>/dev/null;then
+            REMOTE_VER=$(wget -q -T 8 -O- ${GITEE_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+        fi
+        REMOTE_RAW_URL="${GITEE_RAW}"
+    fi
+
     if [[ -n "${REMOTE_VER}" ]];then
         if [[ "${REMOTE_VER}" != "${SCRIPT_VERSION}" ]];then
             echo "发现新版本脚本: ${REMOTE_VER} (当前:${SCRIPT_VERSION})"
@@ -77,7 +95,7 @@ check_script_update() {
             echo "脚本已是最新版本"
         fi
     else
-        echo "⚠️ 无法访问github raw，跳过脚本版本检测"
+        echo "⚠️ GitHub/Gitee均无法访问，跳过脚本版本检测"
     fi
 }
 
@@ -307,7 +325,7 @@ EOF
     echo "✅ 配置写入完成: ${FRPC_TOML}"
 }
 
-# 生成systemd service单元 + frpc包装脚本（实现frpc version/config/log/start/stop/restart/status）
+# 生成systemd service单元 + frpc包装脚本
 install_service() {
 cat > ${SYSTEMD_UNIT} <<EOF
 [Unit]
