@@ -1,11 +1,11 @@
 #!/bin/bash
 # Linux systemd frpc onekey install script
-# ScriptVersion=2.0.2
+# ScriptVersion=2.0.3
 # Install dir: /opt/frp
 # Systemd service: /etc/systemd/system/frpc.service
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="2.0.2"
+SCRIPT_VERSION="2.0.3"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/opt/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -325,7 +325,7 @@ EOF
     echo "✅ 配置写入完成: ${FRPC_TOML}"
 }
 
-# 生成systemd service单元 + frpc包装脚本
+# 生成systemd service单元 + frpc包装脚本（增加中文执行反馈）
 install_service() {
 cat > ${SYSTEMD_UNIT} <<EOF
 [Unit]
@@ -343,7 +343,7 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
 
-# 包装脚本，放置 /usr/local/bin/frpc，模拟子命令
+# 包装脚本 /usr/local/bin/frpc，增加中文状态输出
 cat > ${BIN_LINK} <<'SHELL'
 #!/bin/bash
 FRPC_BIN="/opt/frp/frpc-bin"
@@ -351,21 +351,45 @@ FRPC_TOML="/opt/frp/frpc.toml"
 case "$1" in
 start)
     systemctl start frpc
+    RET=$?
+    if [ ${RET} -eq 0 ];then
+        echo "✅ frpc 已启动"
+    else
+        echo "❌ frpc 启动失败"
+    fi
     ;;
 stop)
+    echo "⏹ frpc 正在停止..."
     systemctl stop frpc
+    RET=$?
+    if [ ${RET} -eq 0 ];then
+        echo "✅ frpc 已停止"
+    else
+        echo "❌ frpc 停止失败"
+    fi
     ;;
 restart)
-    systemctl restart frpc
+    echo "⏹ frpc 正在停止..."
+    systemctl stop frpc
+    sleep 1
+    systemctl start frpc
+    RET=$?
+    if [ ${RET} -eq 0 ];then
+        echo "✅ frpc 已运行"
+    else
+        echo "❌ frpc 重启失败"
+    fi
     ;;
 status)
     systemctl status frpc
     ;;
 enable)
     systemctl enable frpc
+    echo "✅ frpc 已设置开机自启"
     ;;
 disable)
     systemctl disable frpc
+    echo "✅ frpc 已关闭开机自启"
     ;;
 version)
     ${FRPC_BIN} --version
