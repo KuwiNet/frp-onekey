@@ -1,7 +1,9 @@
 
 # 一键部署 frpc / frps 脚本
 > 适配 **systemd Linux 发行版（Ubuntu / Debian / CentOS / Rocky / AlmaLinux）**
-> ⚠️ **OpenWrt 请使用 procd 分支脚本，master分支脚本不兼容OpenWrt**
+> 
+> ⚠️ **OpenWrt 请使用 openwrt 分支脚本，master分支脚本不兼容OpenWrt**
+> 
 > 上游官方项目：[fatedier/frp](https://github.com/fatedier/frp)
 
 ## 📦 frpc 客户端
