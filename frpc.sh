@@ -1,11 +1,11 @@
 #!/bin/bash
 # Linux systemd frpc onekey install script
-# ScriptVersion=2.0.3
+# ScriptVersion=2.1.1
 # Install dir: /opt/frp
 # Systemd service: /etc/systemd/system/frpc.service
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="2.0.3"
+SCRIPT_VERSION="2.1.1"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/opt/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -56,7 +56,6 @@ check_script_update() {
     REMOTE_RAW_URL=""
     REMOTE_VER=""
 
-    # 先尝试github源
     if command -v curl &>/dev/null;then
         REMOTE_VER=$(curl -sL -m 8 ${GITHUB_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
     elif command -v wget &>/dev/null;then
@@ -67,7 +66,6 @@ check_script_update() {
         REMOTE_RAW_URL="${GITHUB_RAW}"
     else
         echo "⚠️ GitHub raw访问失败，尝试切换Gitee国内镜像源"
-        # 降级gitee
         if command -v curl &>/dev/null;then
             REMOTE_VER=$(curl -sL -m 8 ${GITEE_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
         elif command -v wget &>/dev/null;then
@@ -113,13 +111,14 @@ get_arch() {
     echo "检测架构: ${PLATFORM}"
 }
 
-# 获取线上frp最新版本与下载链接
+# 获取线上frp最新版本与frpc下载链接，默认1国内镜像
 get_frp_info() {
     echo "----------------------------------------"
     echo "请选择下载区域："
-    echo "1) 国内(github proxy镜像，推荐)"
+    echo "1) 国内(github proxy镜像，默认)"
     echo "2) 国外(github官方)"
-    read -p "输入选项 [1/2] " area
+    read -p "输入选项 [1/2] (默认1): " area
+    area=${area:-1}
 
     API_RAW="https://api.github.com/repos/fatedier/frp/releases/latest"
     if [[ "${area}" == "1" ]];then
@@ -185,22 +184,28 @@ download_frpc() {
     echo "frpc二进制提取完成: ${FRPC_BIN}"
 }
 
-# 交互式生成frpc.toml（仅toml不存在调用）
+# 交互式生成frpc.toml OIDC / Token二选一认证
 gen_config() {
-    read -p "是否现在交互式填写frpc.toml配置(OIDC认证)? [Y/n] " fillcfg
+    read -p "是否现在交互式填写frpc.toml客户端配置? [Y/n] " fillcfg
     fillcfg=${fillcfg:-Y}
     if [[ ! "${fillcfg}" =~ ^[Yy]$ ]];then
         cat > ${FRPC_TOML} <<EOF
-# 提示：需要前往 https://www.afrp.net 注册获取
+# frpc 客户端模板
 serverAddr = "xx.afrp.net"
 serverPort = 7000
-user = "注册用户名"
-auth.method = "oidc"
-auth.oidc.clientID = "注册用户名"
-auth.oidc.clientSecret = "注册时保存的Client Secret"
-auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
-auth.oidc.audience = "afrp.net"
-auth.oidc.scope = "afrp"
+user = "username"
+
+# --------认证二选一，请取消对应注释-----------
+# OIDC认证
+# auth.method = "oidc"
+# auth.oidc.clientID = "username"
+# auth.oidc.clientSecret = "secret"
+# auth.oidc.issuer = "https://oidc.afrp.net"
+# auth.oidc.audience = "afrp.net"
+
+# Token认证
+# auth.method = "token"
+# auth.token = "your-token-here"
 
 # [[proxies]]
 # name = "ssh"
@@ -209,60 +214,85 @@ auth.oidc.scope = "afrp"
 # localPort = 22
 # remotePort = 6000
 EOF
-        echo "已写入默认frpc.toml（保留ssh示例注释）"
+        echo "已写入完整注释frpc.toml模板，请手动选择认证方式取消注释"
         echo "后续修改配置: vim ${FRPC_TOML}"
         return
     fi
 
-    echo "===== 填写frpc基础必要参数 ====="
+    echo "===== 选择认证模式 ====="
+    echo "1) OIDC 认证"
+    echo "2) Token 认证"
+    read -p "输入选项 [1/2]: " auth_mode
+
+    echo "===== 填写frpc基础参数 ====="
     while true; do
-        read -p "服务端serverAddr(公网IP/域名，必填): " serverAddr
+        read -p "serverAddr(服务端域名/IP，必填): " serverAddr
         [[ -n "${serverAddr}" ]] && break
         echo "❌ serverAddr不能为空，请重新输入！"
     done
     while true; do
-        read -p "服务端serverPort(必填): " serverPort
+        read -p "serverPort(服务端端口，必填，默认7000): " serverPort
+        serverPort=${serverPort:-7000}
         [[ -n "${serverPort}" ]] && break
         echo "❌ serverPort不能为空，请重新输入！"
     done
-    echo "提示：需要前往 https://www.afrp.net 注册获取"
     while true; do
-        read -p "user(注册用户名，必填): " frp_user
+        read -p "user(客户端用户名，必填): " frp_user
         [[ -n "${frp_user}" ]] && break
         echo "❌ user不能为空，请重新输入！"
     done
 
-    read -p "OIDC clientID 是否和 user(${frp_user}) 相同？ [Y/n] " same_clientid
-    same_clientid=${same_clientid:-Y}
-    if [[ "${same_clientid}" =~ ^[Yy]$ ]];then
-        oidc_clientID="${frp_user}"
-        echo "✅ clientID复用user值：${oidc_clientID}"
+    oidc_clientID=""
+    oidc_clientSecret=""
+    oidc_issuer=""
+    oidc_audience=""
+    auth_token=""
+    if [[ "${auth_mode}" == "1" ]];then
+        echo "----- OIDC认证参数 -----"
+        read -p "OIDC clientID 是否和 user(${frp_user}) 相同？ [Y/n] " same_clientid
+        same_clientid=${same_clientid:-Y}
+        if [[ "${same_clientid}" =~ ^[Yy]$ ]];then
+            oidc_clientID="${frp_user}"
+        else
+            read -p "auth.oidc.clientID: " oidc_clientID
+        fi
+        read -p "auth.oidc.clientSecret: " oidc_clientSecret
+        read -p "auth.oidc.issuer(例如 https://oidc.afrp.net): " oidc_issuer
+        read -p "auth.oidc.audience(例如 afrp.net): " oidc_audience
     else
-        while true; do
-            read -p "OIDC clientID(自定义，必填): " oidc_clientID
-            [[ -n "${oidc_clientID}" ]] && break
-            echo "❌ clientID不能为空，请重新输入！"
-        done
+        echo "----- Token认证参数 -----"
+        read -p "auth.token: " auth_token
     fi
 
-    while true; do
-        read -p "OIDC clientSecret(注册时保存的Client Secret，必填): " oidc_clientSecret
-        [[ -n "${oidc_clientSecret}" ]] && break
-        echo "❌ clientSecret不能为空，请重新输入！"
-    done
-
     cat > ${FRPC_TOML} <<EOF
-# 提示：需要前往 https://www.afrp.net 注册获取
 serverAddr = "${serverAddr}"
 serverPort = ${serverPort}
 user = "${frp_user}"
+EOF
+
+    if [[ "${auth_mode}" == "1" ]];then
+cat >> ${FRPC_TOML} <<AUTH
 auth.method = "oidc"
 auth.oidc.clientID = "${oidc_clientID}"
 auth.oidc.clientSecret = "${oidc_clientSecret}"
-auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
-auth.oidc.audience = "afrp.net"
-auth.oidc.scope = "afrp"
-EOF
+auth.oidc.issuer = "${oidc_issuer}"
+auth.oidc.audience = "${oidc_audience}"
+
+# auth.method = "token"
+# auth.token = "your-token-here"
+AUTH
+    else
+cat >> ${FRPC_TOML} <<AUTH
+auth.method = "token"
+auth.token = "${auth_token}"
+
+# auth.method = "oidc"
+# auth.oidc.clientID = "${frp_user}"
+# auth.oidc.clientSecret = "secret"
+# auth.oidc.issuer = "https://oidc.afrp.net"
+# auth.oidc.audience = "afrp.net"
+AUTH
+    fi
 
     add_tunnel="y"
     while [[ "${add_tunnel}" =~ ^[Yy]$ ]]; do
@@ -325,7 +355,7 @@ EOF
     echo "✅ 配置写入完成: ${FRPC_TOML}"
 }
 
-# 生成systemd service单元 + frpc包装脚本（增加中文执行反馈）
+# 生成systemd + 包装脚本，增加真实PID获取，对齐frps输出风格
 install_service() {
 cat > ${SYSTEMD_UNIT} <<EOF
 [Unit]
@@ -343,17 +373,24 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
 
-# 包装脚本 /usr/local/bin/frpc，增加中文状态输出
 cat > ${BIN_LINK} <<'SHELL'
 #!/bin/bash
 FRPC_BIN="/opt/frp/frpc-bin"
 FRPC_TOML="/opt/frp/frpc.toml"
+
+get_frpc_pid() {
+    PID=$(ps -ef | grep -v grep | grep "${FRPC_BIN}" | awk '{print $2}')
+    echo "${PID}"
+}
+
 case "$1" in
 start)
     systemctl start frpc
     RET=$?
-    if [ ${RET} -eq 0 ];then
-        echo "✅ frpc 已启动"
+    sleep 0.8
+    PID=$(get_frpc_pid)
+    if [ ${RET} -eq 0 ] && [ -n "${PID}" ];then
+        echo "✅ frpc 已运行 (pid ${PID})"
     else
         echo "❌ frpc 启动失败"
     fi
@@ -362,7 +399,9 @@ stop)
     echo "⏹ frpc 正在停止..."
     systemctl stop frpc
     RET=$?
-    if [ ${RET} -eq 0 ];then
+    sleep 0.6
+    PID=$(get_frpc_pid)
+    if [ ${RET} -eq 0 ] && [ -z "${PID}" ];then
         echo "✅ frpc 已停止"
     else
         echo "❌ frpc 停止失败"
@@ -371,17 +410,26 @@ stop)
 restart)
     echo "⏹ frpc 正在停止..."
     systemctl stop frpc
-    sleep 1
+    sleep 0.8
     systemctl start frpc
     RET=$?
-    if [ ${RET} -eq 0 ];then
-        echo "✅ frpc 已运行"
+    sleep 0.8
+    PID=$(get_frpc_pid)
+    if [ ${RET} -eq 0 ] && [ -n "${PID}" ];then
+        echo "✅ frpc 已运行 (pid ${PID})"
     else
         echo "❌ frpc 重启失败"
     fi
     ;;
 status)
-    systemctl status frpc
+    systemctl status frpc --no-pager -l
+    PID=$(get_frpc_pid)
+    echo "----------------------------------------"
+    if [ -n "${PID}" ];then
+        echo "🔎 frpc 实际进程PID: ${PID}"
+    else
+        echo "🔎 frpc 当前没有运行进程"
+    fi
     ;;
 enable)
     systemctl enable frpc
@@ -403,10 +451,10 @@ log)
     ;;
 *)
     echo "frpc 命令帮助："
-    echo "  start      启动服务"
+    echo "  start      启动服务，打印真实PID"
     echo "  stop       停止服务"
-    echo "  restart    重启服务"
-    echo "  status     查看运行状态"
+    echo "  restart    重启服务，打印新PID"
+    echo "  status     查看systemd状态 + 实际进程PID"
     echo "  enable     开启开机自启"
     echo "  disable    关闭开机自启"
     echo "  version    查看frpc版本"
@@ -457,7 +505,6 @@ action_install() {
         download_frpc
     fi
 
-    # toml存在直接跳过配置向导
     if [[ ! -f "${FRPC_TOML}" ]];then
         echo "📄 frpc.toml不存在，进入配置生成流程"
         gen_config
@@ -469,10 +516,10 @@ action_install() {
     echo "=============================================="
     echo "🎉 frpc 操作完成！目录：${INSTALL_DIR}"
     echo "📋 常用命令："
-    echo "   frpc start      启动frpc"
+    echo "   frpc start      启动frpc，输出真实pid"
     echo "   frpc stop       停止frpc"
-    echo "   frpc restart    重启frpc"
-    echo "   frpc status     查看运行状态"
+    echo "   frpc restart    重启frpc，输出新pid"
+    echo "   frpc status     查看运行状态+实际进程PID"
     echo "   frpc enable     开启开机自启"
     echo "   frpc disable    关闭开机自启"
     echo "   frpc version    查看frpc版本"
@@ -538,7 +585,6 @@ main() {
     esac
 }
 
-# 需要root权限
 if [[ $EUID -ne 0 ]];then
     echo "❌ 必须使用root/sudo执行本脚本！"
     exit 1
