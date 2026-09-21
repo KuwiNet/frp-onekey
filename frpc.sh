@@ -1,12 +1,12 @@
 #!/bin/sh
 # OpenWrt frpc onekey install script
 # Repo: https://github.com/KuwiNet/frp-onekey/tree/openwrt
-# ScriptVersion=1.6.9
+# ScriptVersion=1.7.0
 # Frp install dir: /root/frp
 # Service: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="1.6.9"
+SCRIPT_VERSION="1.7.0"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -161,7 +161,7 @@ download_frpc() {
     echo "frpc二进制提取完成: ${FRPC_BIN}"
 }
 
-# 交互式生成frpc.toml
+# 交互式生成frpc.toml（仅toml不存在时才调用）
 gen_config() {
     read -p "是否现在交互式填写frpc.toml配置(OIDC认证)? [Y/n] " fillcfg
     fillcfg=${fillcfg:-Y}
@@ -383,8 +383,13 @@ action_install() {
     # 判断是否已经安装frpc二进制
     if [ -f "${FRPC_BIN}" ]; then
         echo "✅ 检测到已存在frpc二进制文件"
-        CURRENT_FRPC_VER=$(${FRPC_BIN} --version | awk '/frpc/ {print $3}' | sed 's/v//')
-        echo "本地frpc版本: v${CURRENT_FRPC_VER}"
+        # 修复版本提取：匹配 v0.71.0 这类版本号
+        CURRENT_FRPC_VER=$(${FRPC_BIN} --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | sed 's/v//')
+        if [ -z "${CURRENT_FRPC_VER}" ]; then
+            echo "⚠️ 无法读取本地frpc版本号"
+        else
+            echo "本地frpc版本: v${CURRENT_FRPC_VER}"
+        fi
         echo "线上最新frp版本: v${LATEST_FRPC_VER}"
 
         # 版本对比
@@ -407,10 +412,17 @@ action_install() {
         download_frpc
     fi
 
-    gen_config
+    # 核心改动：仅toml不存在时，才生成配置，已有toml直接跳过
+    if [ ! -f "${FRPC_TOML}" ]; then
+        echo "📄 frpc.toml不存在，进入配置生成流程"
+        gen_config
+    else
+        echo "✅ 已存在frpc.toml，保留原有配置，跳过配置填写"
+    fi
+
     install_service
     echo "=============================================="
-    echo "🎉 frpc 安装完成！目录：${INSTALL_DIR}"
+    echo "🎉 frpc 操作完成！目录：${INSTALL_DIR}"
     echo "📋 常用命令："
     echo "   frpc start      启动frpc"
     echo "   frpc stop       停止frpc"
@@ -475,8 +487,8 @@ main() {
             ;;
         *)
             echo "用法: ./${SCRIPT_NAME} [install|update|uninstall]"
-            echo "  install    全新安装frpc，已安装则检测版本更新"
-            echo "  update     强制更新脚本和frpc二进制"
+            echo "  install    全新安装frpc，已安装则检测版本更新；已有toml则保留原有配置"
+            echo "  update     强制更新脚本和frpc二进制，不改动toml配置"
             echo "  uninstall  卸载frpc"
             exit 0
     esac
