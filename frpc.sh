@@ -1,12 +1,12 @@
 #!/bin/sh
 # OpenWrt frpc onekey install script
 # Repo: https://github.com/KuwiNet/frp-onekey/tree/openwrt
-# ScriptVersion=1.6.6
+# ScriptVersion=1.6.7
 # Frp install dir: /root/frp
 # Service: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="1.6.6"
+SCRIPT_VERSION="1.6.7"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -96,8 +96,8 @@ get_arch() {
     echo "检测架构: ${PLATFORM}"
 }
 
-# 选择国内/国外下载源，获取最新frp下载链接，无jq，awk提取
-get_download_url() {
+# 获取线上最新frp版本号 + 下载链接
+get_frp_info() {
     echo "----------------------------------------"
     echo "请选择下载区域："
     echo "1) 国内(github proxy镜像，推荐)"
@@ -110,16 +110,19 @@ get_download_url() {
     fi
 
     echo "获取frp最新版本信息..."
-    DL_URL=$(curl -sL ${API_RAW} | awk -F'"' -v plat="${PLATFORM}.tar.gz" '$2=="browser_download_url" && $4 ~ plat {print $4;exit}')
+    API_CONTENT=$(curl -sL ${API_RAW})
+    LATEST_FRPC_VER=$(echo "$API_CONTENT" | awk -F'"' '$2=="tag_name"{print $4;exit}' | sed 's/v//')
+    DL_URL=$(echo "$API_CONTENT" | awk -F'"' -v plat="${PLATFORM}.tar.gz" '$2=="browser_download_url" && $4 ~ plat {print $4;exit}')
 
-    if [ -z "${DL_URL}" ];then
-        echo "❌ 无法匹配对应架构的frp下载链接！PLATFORM=${PLATFORM}"
+    if [ -z "${DL_URL}" ] || [ -z "${LATEST_FRPC_VER}" ];then
+        echo "❌ 无法获取frp版本或下载链接！PLATFORM=${PLATFORM}"
         exit 1
     fi
 
     if [ "$area" = "1" ]; then
         DL_URL="https://mirror.ghproxy.com/${DL_URL}"
     fi
+    echo "线上最新frp版本: v${LATEST_FRPC_VER}"
     echo "下载链接: ${DL_URL}"
 }
 
@@ -368,8 +371,35 @@ EOF
 # install 主流程
 action_install() {
     get_arch
-    get_download_url
-    download_frpc
+    get_frp_info
+
+    # 判断是否已经安装frpc二进制
+    if [ -f "${FRPC_BIN}" ]; then
+        echo "✅ 检测到已存在frpc二进制文件"
+        CURRENT_FRPC_VER=$(${FRPC_BIN} --version | awk '/frpc/ {print $3}' | sed 's/v//')
+        echo "本地frpc版本: v${CURRENT_FRPC_VER}"
+        echo "线上最新frp版本: v${LATEST_FRPC_VER}"
+
+        # 版本对比
+        if [ "${CURRENT_FRPC_VER}" = "${LATEST_FRPC_VER}" ]; then
+            echo "✅ 当前frpc已经是最新版本，跳过二进制下载"
+        else
+            read -p "发现新版本frpc，是否升级frpc二进制？[Y/n] " upgrade_ans
+            upgrade_ans=${upgrade_ans:-Y}
+            if [ "$upgrade_ans" = "y" ] || [ "$upgrade_ans" = "Y" ]; then
+                echo "停止frpc服务准备升级..."
+                ${INIT_FILE} stop 2>/dev/null
+                download_frpc
+                echo "升级完成"
+            else
+                echo "跳过frpc二进制升级"
+            fi
+        fi
+    else
+        echo "未检测到frpc二进制，开始全新下载安装"
+        download_frpc
+    fi
+
     gen_config
     install_service
     echo "=============================================="
@@ -395,7 +425,7 @@ action_update() {
     # 更新frpc前同样校验依赖
     check_and_install_deps
     get_arch
-    get_download_url
+    get_frp_info
     echo "停止旧frpc..."
     ${INIT_FILE} stop 2>/dev/null
     download_frpc
@@ -438,8 +468,8 @@ main() {
             ;;
         *)
             echo "用法: ./${SCRIPT_NAME} [install|update|uninstall]"
-            echo "  install    全新安装frpc"
-            echo "  update     更新脚本和frpc二进制"
+            echo "  install    全新安装frpc，已安装则检测版本更新"
+            echo "  update     强制更新脚本和frpc二进制"
             echo "  uninstall  卸载frpc"
             exit 0
     esac
