@@ -1,12 +1,12 @@
 #!/bin/sh
 # OpenWrt frpc onekey install script
 # Repo: https://github.com/KuwiNet/frp-onekey/tree/openwrt
-# ScriptVersion=1.6.3
+# ScriptVersion=1.6.4
 # Frp install dir: /root/frp
 # Service: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="1.6.3"
+SCRIPT_VERSION="1.6.4"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -118,7 +118,7 @@ get_download_url() {
     echo "下载链接: ${DL_URL}"
 }
 
-# 下载并解压frpc，重命名为frpc-bin，增加tar包校验
+# 下载并解压frpc，重命名为frpc-bin，改用gzip文件头校验，修复BusyBox tar误判
 download_frpc() {
     mkdir -p ${INSTALL_DIR}
     TMP_FILE="/tmp/frp.tar.gz"
@@ -132,9 +132,10 @@ download_frpc() {
         echo "❌ 下载失败！"
         exit 1
     fi
-    # 校验是否为有效的tar压缩包
-    if ! tar -tf ${TMP_FILE} >/dev/null 2>&1;then
-        echo "❌ 下载的不是有效的tar压缩包，链接获取错误！"
+    # 判断gzip文件头 1f 8b，不再用tar -tf校验（BusyBox tar容易误报）
+    FILE_HEAD=$(head -c2 ${TMP_FILE} | hexdump -ve '1/1 "%02x"')
+    if [ "$FILE_HEAD" != "1f8b" ];then
+        echo "❌ 下载的不是有效的gzip压缩包，链接获取错误！"
         rm -f ${TMP_FILE}
         exit 1
     fi
@@ -199,19 +200,19 @@ EOF
         echo "❌ serverPort不能为空，请重新输入！"
     done
 
-    # user 必填
+    # user 必填，修改提示文字
     echo "提示：需要前往 https://www.afrp.net 注册获取"
     while true; do
-        read -p "user(必填): " frp_user
+        read -p "user(注册用户名，必填): " frp_user
         if [ -n "${frp_user}" ]; then
             break
         fi
         echo "❌ user不能为空，请重新输入！"
     done
 
-    # OIDC clientID 增加非空校验
+    # OIDC clientID 修改提示文字，保留非空校验
     while true; do
-        read -p "OIDC clientID(afrp注册用户名，必填): " oidc_clientID
+        read -p "OIDC clientID(注册用户名，必填): " oidc_clientID
         if [ -n "${oidc_clientID}" ]; then
             break
         fi
