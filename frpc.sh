@@ -1,12 +1,12 @@
 #!/bin/sh
 # OpenWrt frpc onekey install script
 # Repo: https://github.com/KuwiNet/frp-onekey/tree/openwrt
-# ScriptVersion=1.6.7
+# ScriptVersion=1.6.9
 # Frp install dir: /root/frp
 # Service: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="1.6.7"
+SCRIPT_VERSION="1.6.9"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -166,7 +166,7 @@ gen_config() {
     read -p "是否现在交互式填写frpc.toml配置(OIDC认证)? [Y/n] " fillcfg
     fillcfg=${fillcfg:-Y}
     if [ "$fillcfg" != "y" ] && [ "$fillcfg" != "Y" ]; then
-        # 默认模板：保留注释ssh代理示例块
+        # 默认模板：保留注释ssh代理示例块，修正oidc字段
         cat > ${FRPC_TOML} <<EOF
 # 提示：需要前往 https://www.afrp.net 注册获取
 serverAddr = "xx.afrp.net"
@@ -177,7 +177,7 @@ auth.oidc.clientID = "注册用户名"
 auth.oidc.clientSecret = "注册时保存的Client Secret"
 auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
 auth.oidc.audience = "afrp.net"
-auth.oidc.issuer = "afrp"
+auth.oidc.scope = "afrp"
 
 # [[proxies]]
 # name = "ssh"
@@ -220,14 +220,21 @@ EOF
         echo "❌ user不能为空，请重新输入！"
     done
 
-    # OIDC clientID
-    while true; do
-        read -p "OIDC clientID(注册用户名，必填): " oidc_clientID
-        if [ -n "${oidc_clientID}" ]; then
-            break
-        fi
-        echo "❌ clientID不能为空，请重新输入！"
-    done
+    # OIDC clientID：默认和user相同，Y直接复用，N自定义输入
+    read -p "OIDC clientID 是否和 user(${frp_user}) 相同？ [Y/n] " same_clientid
+    same_clientid=${same_clientid:-Y}
+    if [ "$same_clientid" = "y" ] || [ "$same_clientid" = "Y" ]; then
+        oidc_clientID="${frp_user}"
+        echo "✅ clientID复用user值：${oidc_clientID}"
+    else
+        while true; do
+            read -p "OIDC clientID(自定义，必填): " oidc_clientID
+            if [ -n "${oidc_clientID}" ]; then
+                break
+            fi
+            echo "❌ clientID不能为空，请重新输入！"
+        done
+    fi
 
     # OIDC clientSecret
     while true; do
@@ -238,7 +245,7 @@ EOF
         echo "❌ clientSecret不能为空，请重新输入！"
     done
 
-    # 交互式模式：基础配置，**不带ssh注释示例**
+    # 交互式模式：基础配置
     cat > ${FRPC_TOML} <<EOF
 # 提示：需要前往 https://www.afrp.net 注册获取
 serverAddr = "${serverAddr}"
@@ -249,7 +256,7 @@ auth.oidc.clientID = "${oidc_clientID}"
 auth.oidc.clientSecret = "${oidc_clientSecret}"
 auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
 auth.oidc.audience = "afrp.net"
-auth.oidc.issuer = "afrp"
+auth.oidc.scope = "afrp"
 EOF
 
     # 隧道循环添加
