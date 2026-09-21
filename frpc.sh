@@ -1,12 +1,12 @@
 #!/bin/sh
 # OpenWrt frpc onekey install script
 # Repo: https://github.com/KuwiNet/frp-onekey/tree/openwrt
-# ScriptVersion=1.6.0
+# ScriptVersion=1.6.2
 # Frp install dir: /root/frp
 # Service: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="1.6.0"
+SCRIPT_VERSION="1.6.2"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -187,18 +187,33 @@ EOF
         echo "❌ serverPort不能为空，请重新输入！"
     done
 
-    # user 必填，增加网站注册提示
+    # user 必填
     echo "提示：需要前往 https://www.afrp.net 注册获取"
     while true; do
-        read -p "用户标识 user(必填): " frp_user
+        read -p "user(必填): " frp_user
         if [ -n "${frp_user}" ]; then
             break
         fi
         echo "❌ user不能为空，请重新输入！"
     done
 
-    read -p "OIDC clientID(afrp注册用户名): " oidc_clientID
-    read -p "OIDC clientSecret(注册时保存的Client Secret): " oidc_clientSecret
+    # OIDC clientID 增加非空校验
+    while true; do
+        read -p "OIDC clientID(afrp注册用户名，必填): " oidc_clientID
+        if [ -n "${oidc_clientID}" ]; then
+            break
+        fi
+        echo "❌ clientID不能为空，请重新输入！"
+    done
+
+    # OIDC clientSecret 增加非空校验
+    while true; do
+        read -p "OIDC clientSecret(注册时保存的Client Secret，必填): " oidc_clientSecret
+        if [ -n "${oidc_clientSecret}" ]; then
+            break
+        fi
+        echo "❌ clientSecret不能为空，请重新输入！"
+    done
 
     # 写入toml，严格按你指定顺序
     cat > ${FRPC_TOML} <<EOF
