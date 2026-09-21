@@ -1,0 +1,165 @@
+#! /bin/bash
+# chkconfig: 2345 55 25
+# Description: Startup script for frpc on Debian. Place in /etc/init.d and
+# run 'update-rc.d -f frpc defaults', or use the appropriate command on your
+# distro. For CentOS/Redhat run: 'chkconfig --add frpc'
+#=========================================================
+#   System Required:  CentOS/Debian/Ubuntu/Fedora (32bit/64bit)
+#   Description:  Manager for frpc, Written by Clang
+#   Mender：MvsCode
+#=========================================================
+### BEGIN INIT INFO
+# Provides:          frpc
+# Required-Start:    $all
+# Required-Stop:     $all
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: starts the frpc
+# Description:       starts frpc using start-stop
+### END INIT INFO
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+ProgramName="Frpc"
+ProgramPath="/usr/local/frpc"
+NAME=frpc
+BIN=${ProgramPath}/${NAME}
+CONFIGFILE=${ProgramPath}/frpc.toml
+SCRIPTNAME=/etc/init.d/${NAME}
+version="25.310"
+program_version=`${BIN} --version`
+RET_VAL=0
+
+[ -x ${BIN} ] || exit 0
+strLog=""
+fun_clangcn()
+{
+    echo ""
+    echo "+---------------------------------------------------------+"
+    echo "|       ${ProgramName} 管理快捷命令  Clang 原创  KuwiNet 修改       |"
+    echo "+---------------------------------------------------------+"
+    echo ""
+}
+
+fun_check_run(){
+    PID=`ps -ef | grep -v grep | grep -i "${BIN}" | awk '{print $2}'`
+    if [ ! -z $PID  ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+fun_load_config(){
+    if [ ! -r ${CONFIGFILE} ]; then
+        echo "配置文件 ${CONFIGFILE} 未找到"
+        return 1
+    fi
+}
+fun_start()
+{
+    if [ "${arg1}" = "start" ]; then
+      fun_clangcn
+    fi
+    if fun_check_run; then
+        echo "${ProgramName} (pid $PID) 已在运行."
+        return 0
+    fi
+    fun_load_config
+    echo -n "开始启动 ${ProgramName}(${program_version})..."
+    ${BIN} -c ${CONFIGFILE} >/dev/null 2>&1 &
+    sleep 1
+    if ! fun_check_run; then
+        echo "启动失败"
+        return 1
+    fi
+    echo " 完毕"
+    echo "${ProgramName} (pid $PID) 正在运行."
+    return 0
+}
+
+fun_stop(){
+    if [ "${arg1}" = "stop" ] || [ "${arg1}" = "restart" ]; then
+      fun_clangcn
+    fi
+    if fun_check_run; then
+        echo -n "停止 ${ProgramName} (pid $PID)... "
+        kill $PID
+        if [ "$?" != 0 ] ; then
+            echo " 失败"
+            return 1
+        else
+            echo " 完毕"
+        fi
+    else
+        echo "${ProgramName} 没有运行."
+    fi
+    return 0
+}
+fun_restart(){
+    fun_stop
+    fun_start
+}
+fun_status(){
+    PID=`ps -ef | grep -v grep | grep -i "${BIN}" | awk '{print $2}'`
+    if [ ! -z $PID ]; then
+        echo "${ProgramName} (pid $PID) 正在运行..."
+    else
+        echo "${ProgramName} 已停止"
+        exit 0
+    fi
+}
+checkos(){
+    if   grep -Eqi "CentOS" /etc/issue || grep -Eq "CentOS" /etc/*-release; then
+        OS=CentOS
+    elif grep -Eqi "Debian" /etc/issue || grep -Eq "Debian" /etc/*-release; then
+        OS=Debian
+    elif grep -Eqi "Ubuntu" /etc/issue || grep -Eq "Ubuntu" /etc/*-release; then
+        OS=Ubuntu
+    elif grep -Eqi "Alpine" /etc/issue || grep -Eq "Alpine" /etc/*-release; then
+        OS=Alpine
+    elif grep -Eqi "Fedora" /etc/issue || grep -Eq "Fedora" /etc/*-release; then
+        OS=Fedora
+    else
+        echo "不支持操作系统，请重新安装操作系统并重试!"
+        return 1
+    fi
+}
+fun_config(){
+    if [ -s ${CONFIGFILE} ]; then
+        vi ${CONFIGFILE}
+    else
+        echo "${ProgramName} 未找到配置文件!"
+        return 1
+    fi
+}
+fun_version(){
+    echo "${ProgramName} 版本是 ${program_version}"
+    return 0
+}
+fun_help(){
+    ${BIN} --help
+    return 0
+}
+
+arg1=$1
+[  -z ${arg1} ]
+case "${arg1}" in
+    start|stop|restart|status|config)
+        fun_${arg1}
+    ;;
+    [vV][eE][rR][sS][iI][oO][nN]|-[vV][eE][rR][sS][iI][oO][nN]|--[vV][eE][rR][sS][iI][oO][nN]|-[vV]|--[vV])
+        fun_version
+    ;;
+    [Cc]|[Cc][Oo][Nn][Ff]|[Cc][Oo][Nn][Ff][Ii][Gg]|-[Cc]|-[Cc][Oo][Nn][Ff]|-[Cc][Oo][Nn][Ff][Ii][Gg]|--[Cc]|--[Cc][Oo][Nn][Ff]|--[Cc][Oo][Nn][Ff][Ii][Gg])
+        fun_config
+    ;;
+    [Hh]|[Hh][Ee][Ll][Pp]|-[Hh]|-[Hh][Ee][Ll][Pp]|--[Hh]|--[Hh][Ee][Ll][Pp])
+        fun_help
+    ;;
+    *)
+        fun_clangcn
+        echo "用法: frpc {start|stop|restart|status|config|version}"
+        echo ""
+        RET_VAL=1
+    ;;
+esac
+exit $RET_VAL
