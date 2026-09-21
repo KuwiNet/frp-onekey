@@ -1,25 +1,17 @@
 #!/bin/bash
-# Linux systemd frps onekey install script (OIDC版本)
-# ScriptVersion=2.0.7
+# Linux systemd frps onekey install script
+# ScriptVersion=2.1.1
 # Install dir: /opt/frps
 # Systemd service: /etc/systemd/system/frps.service
 # Cmd: frps xxx
 
-SCRIPT_VERSION="2.0.7"
+SCRIPT_VERSION="2.1.1"
 SCRIPT_NAME="frps.sh"
 INSTALL_DIR="/opt/frps"
 FRPS_BIN="${INSTALL_DIR}/frps-bin"
 FRPS_TOML="${INSTALL_DIR}/frps.toml"
 SYSTEMD_UNIT="/etc/systemd/system/frps.service"
 BIN_LINK="/usr/local/bin/frps"
-
-# 版本提示：OIDC版本脚本，提示token版下载地址
-echo "============================================================"
-echo "⚠️  当前脚本为【OIDC认证】版本 frps 一键脚本"
-echo "👉 如果需要传统token认证版本，请执行下面命令下载frps_token.sh："
-echo 'curl -LO https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps_token.sh && chmod +x frps_token.sh && sudo bash frps_token.sh install'
-echo "============================================================"
-echo ""
 
 # 依赖检查，输出对应发行版安装提示
 check_and_install_deps() {
@@ -194,11 +186,12 @@ download_frps() {
     echo "frps二进制提取完成: ${FRPS_BIN}"
 }
 
-# 交互式生成frps.toml（仅toml不存在调用，支持OIDC全套参数）
+# 交互式生成frps.toml，增加认证模式选择 OIDC / Token，修复token缺少auth.method="token"
 gen_config() {
     read -p "是否现在交互式填写frps.toml服务端配置? [Y/n] " fillcfg
     fillcfg=${fillcfg:-Y}
     if [[ ! "${fillcfg}" =~ ^[Yy]$ ]];then
+        # 直接输出完整注释模板
         cat > ${FRPS_TOML} <<EOF
 # IPv6 的文字地址或主机名必须括在方括号中，例如“[::1]:80”、“[ipv6-host]:http”或“[ipv6-host%zone]:80”
 # 对于单个“bindAddr”字段，不需要方括号，例如“bindAddr = "::"”。
@@ -228,10 +221,15 @@ log.maxDays = 3
 # 当 log.to 是控制台时禁用日志颜色，默认为 false
 log.disablePrintColor = false
 
-# OIDC认证示例
+# --------认证二选一，请取消对应注释-----------
+# OIDC认证
 # auth.method = "oidc"
 # auth.oidc.issuer = "https://oidc.afrp.net"
 # auth.oidc.audience = "afrp.net"
+
+# Token认证
+# auth.method = "token"
+# auth.token = "your-token-here"
 
 # 配置 Web 服务器以启用 frps 的仪表板。
 # 仅当设置了 webServer.port 时，仪表板才可用。
@@ -254,10 +252,15 @@ maxPortsPerClient = 0
 # HTTP 请求的自定义 404 页面
 # custom404Page = "/home/index_self.html"
 EOF
-        echo "已写入默认frps.toml模板"
+        echo "已写入完整注释frps.toml模板，请手动选择认证方式取消注释"
         echo "后续修改配置: vim ${FRPS_TOML}"
         return
     fi
+
+    echo "===== 选择认证模式 ====="
+    echo "1) OIDC 认证"
+    echo "2) Token 认证"
+    read -p "输入选项 [1/2]: " auth_mode
 
     echo "===== 填写frps基础参数 ====="
     read -p "bindAddr(监听地址，默认0.0.0.0): " bindAddr
@@ -290,14 +293,17 @@ EOF
     read -p "maxPortsPerClient单客户端最大端口数，0无限制(默认0): " maxPortsPerClient
     maxPortsPerClient=${maxPortsPerClient:-0}
 
-    echo "----- OIDC认证配置 -----"
-    read -p "是否启用OIDC认证? [Y/n] " oidc_enable
-    oidc_enable=${oidc_enable:-n}
+    # 认证参数采集
     oidc_issuer=""
     oidc_audience=""
-    if [[ "${oidc_enable}" =~ ^[Yy]$ ]];then
+    auth_token=""
+    if [[ "${auth_mode}" == "1" ]];then
+        echo "----- OIDC认证参数 -----"
         read -p "auth.oidc.issuer(例如 https://oidc.afrp.net): " oidc_issuer
         read -p "auth.oidc.audience(例如 afrp.net): " oidc_audience
+    else
+        echo "----- Token认证参数 -----"
+        read -p "auth.token: " auth_token
     fi
 
     echo "----- 日志配置 -----"
@@ -320,7 +326,7 @@ EOF
     read -p "webServer.password(面板密码，默认admin): " web_pass
     web_pass=${web_pass:-"admin"}
 
-    # 写入toml
+    # 写入toml基础部分
     cat > ${FRPS_TOML} <<EOF
 bindAddr = "${bindAddr}"
 bindPort = ${bindPort}
@@ -338,12 +344,27 @@ log.maxDays = ${log_maxDays}
 log.disablePrintColor = ${log_discolor^^}
 EOF
 
-    if [[ "${oidc_enable}" =~ ^[Yy]$ && -n "${oidc_issuer}" && -n "${oidc_audience}" ]];then
-cat >> ${FRPS_TOML} <<OIDC
+    # 根据选择写入认证：选中的取消注释生效，另一种全部注释
+    if [[ "${auth_mode}" == "1" ]];then
+        # OIDC启用，token注释
+cat >> ${FRPS_TOML} <<AUTH
 auth.method = "oidc"
 auth.oidc.issuer = "${oidc_issuer}"
 auth.oidc.audience = "${oidc_audience}"
-OIDC
+
+# auth.method = "token"
+# auth.token = "your-token-here"
+AUTH
+    else
+        # Token启用，oidc注释；修复：增加 auth.method = "token"
+cat >> ${FRPS_TOML} <<AUTH
+auth.method = "token"
+auth.token = "${auth_token}"
+
+# auth.method = "oidc"
+# auth.oidc.issuer = "https://oidc.afrp.net"
+# auth.oidc.audience = "afrp.net"
+AUTH
     fi
 
     if [[ -n "${subDomainHost}" ]];then
@@ -528,10 +549,10 @@ action_install() {
     echo "=============================================="
     echo "🎉 frps 操作完成！目录：${INSTALL_DIR}"
     echo "📋 常用命令："
-    echo "   frps start      启动frps"
+    echo "   frps start      启动frps，输出真实pid"
     echo "   frps stop       停止frps"
-    echo "   frps restart    重启frps"
-    echo "   frps status     查看运行状态"
+    echo "   frps restart    重启frps，输出新pid"
+    echo "   frps status     查看运行状态+实际进程PID"
     echo "   frps enable     开启开机自启"
     echo "   frps disable    关闭开机自启"
     echo "   frps version    查看frps版本"
