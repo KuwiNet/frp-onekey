@@ -1,12 +1,12 @@
 #!/bin/sh
 # OpenWrt frpc onekey install script
 # Repo: https://github.com/KuwiNet/frp-onekey/tree/openwrt
-# ScriptVersion=1.3.0
+# ScriptVersion=1.6.0
 # Frp install dir: /root/frp
 # Service: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="1.3.0"
+SCRIPT_VERSION="1.6.0"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -140,21 +140,22 @@ download_frpc() {
     echo "frpc二进制提取完成: ${FRPC_BIN}"
 }
 
-# 交互式生成frpc.toml（OIDC模式 + user必填项）
+# 交互式生成frpc.toml，完全按你指定顺序与模板
 gen_config() {
     read -p "是否现在交互式填写frpc.toml配置(OIDC认证)? [y/N] " fillcfg
     if [ "$fillcfg" != "y" ] && [ "$fillcfg" != "Y" ]; then
-        # 默认模板 OIDC，增加user字段
+        # 默认模板完全按你提供内容
         cat > ${FRPC_TOML} <<EOF
-serverAddr = "x.x.x.x"
+# 提示：需要前往 https://www.afrp.net 注册获取
+serverAddr = "xx.afrp.net"
 serverPort = 7000
-user = ""
+user = "注册用户名"
 auth.method = "oidc"
-auth.oidc.clientID = "your-client-id"
-auth.oidc.clientSecret = "your-client-secret"
-auth.oidc.audience = "https://xxx/.default"
-auth.oidc.issuer = "https://oidc.xxx.com"
-# auth.oidc.tokenEndpointURL = ""
+auth.oidc.clientID = "注册用户名"
+auth.oidc.clientSecret = "注册时保存的Client Secret"
+auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
+auth.oidc.audience = "afrp.net"
+auth.oidc.issuer = "afrp"
 # [[proxies]]
 # name = "ssh"
 # type = "tcp"
@@ -168,7 +169,26 @@ EOF
     fi
 
     echo "===== 填写frpc基础必要参数 ====="
-    # user 强制输入，不能为空
+    # serverAddr 必填
+    while true; do
+        read -p "服务端serverAddr(公网IP/域名，必填): " serverAddr
+        if [ -n "${serverAddr}" ]; then
+            break
+        fi
+        echo "❌ serverAddr不能为空，请重新输入！"
+    done
+
+    # serverPort 必填
+    while true; do
+        read -p "服务端serverPort(必填): " serverPort
+        if [ -n "${serverPort}" ]; then
+            break
+        fi
+        echo "❌ serverPort不能为空，请重新输入！"
+    done
+
+    # user 必填，增加网站注册提示
+    echo "提示：需要前往 https://www.afrp.net 注册获取"
     while true; do
         read -p "用户标识 user(必填): " frp_user
         if [ -n "${frp_user}" ]; then
@@ -177,28 +197,28 @@ EOF
         echo "❌ user不能为空，请重新输入！"
     done
 
-    read -p "服务端serverAddr(公网IP/域名): " serverAddr
-    read -p "服务端serverPort: " serverPort
-    read -p "OIDC clientID: " oidc_clientID
-    read -p "OIDC clientSecret: " oidc_clientSecret
-    read -p "OIDC audience: " oidc_audience
-    read -p "OIDC issuer: " oidc_issuer
-    read -p "OIDC tokenEndpointURL(可选，直接回车跳过): " oidc_tokenEndpointURL
+    read -p "OIDC clientID(afrp注册用户名): " oidc_clientID
+    read -p "OIDC clientSecret(注册时保存的Client Secret): " oidc_clientSecret
 
-    # 写入基础部分（增加user）
+    # 写入toml，严格按你指定顺序
     cat > ${FRPC_TOML} <<EOF
+# 提示：需要前往 https://www.afrp.net 注册获取
 serverAddr = "${serverAddr}"
 serverPort = ${serverPort}
 user = "${frp_user}"
 auth.method = "oidc"
 auth.oidc.clientID = "${oidc_clientID}"
 auth.oidc.clientSecret = "${oidc_clientSecret}"
-auth.oidc.audience = "${oidc_audience}"
-auth.oidc.issuer = "${oidc_issuer}"
+auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
+auth.oidc.audience = "afrp.net"
+auth.oidc.issuer = "afrp"
+# [[proxies]]
+# name = "ssh"
+# type = "tcp"
+# localIP = "127.0.0.1"
+# localPort = 22
+# remotePort = 6000
 EOF
-    if [ -n "${oidc_tokenEndpointURL}" ]; then
-        echo "auth.oidc.tokenEndpointURL = \"${oidc_tokenEndpointURL}\"" >> ${FRPC_TOML}
-    fi
 
     # 隧道循环添加
     add_tunnel="y"
@@ -250,7 +270,7 @@ EOF
     echo "✅ 配置写入完成: ${FRPC_TOML}"
 }
 
-# 写入OpenWrt procd init脚本
+# 写入OpenWrt procd init脚本，包含 log 子命令
 install_service() {
 cat > ${INIT_FILE} <<'EOF'
 #!/bin/sh /etc/rc.common
@@ -271,9 +291,10 @@ start_service() {
     procd_close_instance
 }
 
-EXTRA_COMMANDS="version config"
+EXTRA_COMMANDS="version config log"
 EXTRA_HELP="    version    查看frpc版本
-    config     编辑frpc配置文件"
+    config     编辑frpc配置文件
+    log        实时查看frpc日志"
 
 version() {
     "$BIN" --version
@@ -281,6 +302,11 @@ version() {
 
 config() {
     vi "$CONFIG"
+}
+
+log() {
+    echo "===== frpc 实时日志（Ctrl+C退出） ====="
+    logread -f | grep frpc
 }
 EOF
     chmod +x ${INIT_FILE}
@@ -306,8 +332,9 @@ action_install() {
     echo "   frpc status     查看运行状态"
     echo "   frpc version    查看frpc版本"
     echo "   frpc config     编辑frpc.toml"
+    echo "   frpc log        实时查看frpc日志"
     echo "📄 配置文件：${FRPC_TOML}"
-    echo "📜 查看日志：logread -f | grep frpc"
+    echo "💡 OpenWrt使用procd，不支持systemctl命令"
     echo "💡 如需直接调用frpc二进制本体：/root/frp/frpc-bin --version"
     echo "=============================================="
 }
