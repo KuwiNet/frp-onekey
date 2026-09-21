@@ -1,12 +1,12 @@
 #!/bin/sh
 # OpenWrt frpc onekey install script
 # Repo: https://github.com/KuwiNet/frp-onekey/tree/openwrt
-# ScriptVersion=1.6.2
+# ScriptVersion=1.6.3
 # Frp install dir: /root/frp
 # Service: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="1.6.2"
+SCRIPT_VERSION="1.6.3"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -91,49 +91,61 @@ get_arch() {
     echo "检测架构: ${PLATFORM}"
 }
 
-# 选择国内/国外下载源，获取最新frp下载链接
+# 选择国内/国外下载源，获取最新frp下载链接，无jq，awk提取
 get_download_url() {
     echo "----------------------------------------"
     echo "请选择下载区域："
     echo "1) 国内(github proxy镜像，推荐)"
     echo "2) 国外(github官方)"
     read -p "输入选项 [1/2] " area
+
+    API_RAW="https://api.github.com/repos/fatedier/frp/releases/latest"
     if [ "$area" = "1" ]; then
-        APIURL="https://mirror.ghproxy.com/https://api.github.com/repos/fatedier/frp/releases/latest"
-        PROXY_PREFIX="https://mirror.ghproxy.com/"
-    else
-        APIURL="https://api.github.com/repos/fatedier/frp/releases/latest"
-        PROXY_PREFIX=""
+        API_RAW="https://mirror.ghproxy.com/${API_RAW}"
     fi
+
     echo "获取frp最新版本信息..."
-    if command -v curl >/dev/null; then
-        JSON=$(curl -sL ${APIURL})
-    else
-        JSON=$(wget -qO- ${APIURL})
+    DL_URL=$(curl -sL ${API_RAW} | awk -F'"' -v plat="${PLATFORM}.tar.gz" '$2=="browser_download_url" && $4 ~ plat {print $4;exit}')
+
+    if [ -z "${DL_URL}" ];then
+        echo "❌ 无法匹配对应架构的frp下载链接！PLATFORM=${PLATFORM}"
+        exit 1
     fi
-    DL_URL=$(echo $JSON | grep -o "https.*${PLATFORM}\.tar.gz" | head -n1)
-    DL_URL="${PROXY_PREFIX}${DL_URL}"
+
+    if [ "$area" = "1" ]; then
+        DL_URL="https://mirror.ghproxy.com/${DL_URL}"
+    fi
     echo "下载链接: ${DL_URL}"
 }
 
-# 下载并解压frpc，重命名为frpc-bin
+# 下载并解压frpc，重命名为frpc-bin，增加tar包校验
 download_frpc() {
     mkdir -p ${INSTALL_DIR}
     TMP_FILE="/tmp/frp.tar.gz"
     echo "开始下载frp..."
-    if command -v curl >/dev/null; then
-        curl -L ${DL_URL} -o ${TMP_FILE}
-    else
-        wget ${DL_URL} -O ${TMP_FILE}
+    if [ -z "${DL_URL}" ];then
+        echo "❌ 获取下载链接失败！"
+        exit 1
     fi
+    curl -L ${DL_URL} -o ${TMP_FILE}
     if [ ! -f "${TMP_FILE}" ]; then
-        echo "下载失败！"
+        echo "❌ 下载失败！"
+        exit 1
+    fi
+    # 校验是否为有效的tar压缩包
+    if ! tar -tf ${TMP_FILE} >/dev/null 2>&1;then
+        echo "❌ 下载的不是有效的tar压缩包，链接获取错误！"
+        rm -f ${TMP_FILE}
         exit 1
     fi
     echo "解压..."
     tar -zxf ${TMP_FILE} -C /tmp
-    # 提取frpc二进制并重命名为frpc-bin
+    # 提取frpc二进制
     FRPC_TMP=$(find /tmp -maxdepth 2 -name frpc -type f | head -n1)
+    if [ -z "${FRPC_TMP}" ];then
+        echo "❌ 解压后找不到frpc二进制文件"
+        exit 1
+    fi
     cp ${FRPC_TMP} ${FRPC_BIN}
     chmod +x ${FRPC_BIN}
     rm -rf /tmp/frp*
