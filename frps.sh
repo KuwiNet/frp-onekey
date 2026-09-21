@@ -1,11 +1,11 @@
 #!/bin/bash
 # Linux systemd frps onekey install script (OIDC版本)
-# ScriptVersion=2.0.5
+# ScriptVersion=2.0.7
 # Install dir: /opt/frps
 # Systemd service: /etc/systemd/system/frps.service
 # Cmd: frps xxx
 
-SCRIPT_VERSION="2.0.5"
+SCRIPT_VERSION="2.0.7"
 SCRIPT_NAME="frps.sh"
 INSTALL_DIR="/opt/frps"
 FRPS_BIN="${INSTALL_DIR}/frps-bin"
@@ -121,13 +121,14 @@ get_arch() {
     echo "检测架构: ${PLATFORM}"
 }
 
-# 获取线上frp最新版本与frps下载链接
+# 获取线上frp最新版本与frps下载链接，默认选项2官方源
 get_frp_info() {
     echo "----------------------------------------"
     echo "请选择下载区域："
-    echo "1) 国内(github proxy镜像，推荐)"
-    echo "2) 国外(github官方)"
-    read -p "输入选项 [1/2] " area
+    echo "1) 国内(github proxy镜像)"
+    echo "2) 国外(github官方，默认)"
+    read -p "输入选项 [1/2] (默认2): " area
+    area=${area:-2}
 
     API_RAW="https://api.github.com/repos/fatedier/frp/releases/latest"
     if [[ "${area}" == "1" ]];then
@@ -364,7 +365,7 @@ WEB
     echo "✅ 配置写入完成: ${FRPS_TOML}"
 }
 
-# 生成systemd service单元 + frps包装脚本（增加中文执行反馈）
+# 生成systemd service单元 + frps包装脚本（增加PID真实进程打印）
 install_service() {
 cat > ${SYSTEMD_UNIT} <<EOF
 [Unit]
@@ -382,17 +383,25 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
 
-# 包装脚本 /usr/local/bin/frps，增加中文状态输出
+# 包装脚本 /usr/local/bin/frps，增加获取真实PID
 cat > ${BIN_LINK} <<'SHELL'
 #!/bin/bash
 FRPS_BIN="/opt/frps/frps-bin"
 FRPS_TOML="/opt/frps/frps.toml"
+
+get_frps_pid() {
+    PID=$(ps -ef | grep -v grep | grep "${FRPS_BIN}" | awk '{print $2}')
+    echo "${PID}"
+}
+
 case "$1" in
 start)
     systemctl start frps
     RET=$?
-    if [ ${RET} -eq 0 ];then
-        echo "✅ frps 已启动"
+    sleep 0.8
+    PID=$(get_frps_pid)
+    if [ ${RET} -eq 0 ] && [ -n "${PID}" ];then
+        echo "✅ frps 已运行 (pid ${PID})"
     else
         echo "❌ frps 启动失败"
     fi
@@ -401,7 +410,9 @@ stop)
     echo "⏹ frps 正在停止..."
     systemctl stop frps
     RET=$?
-    if [ ${RET} -eq 0 ];then
+    sleep 0.6
+    PID=$(get_frps_pid)
+    if [ ${RET} -eq 0 ] && [ -z "${PID}" ];then
         echo "✅ frps 已停止"
     else
         echo "❌ frps 停止失败"
@@ -410,17 +421,26 @@ stop)
 restart)
     echo "⏹ frps 正在停止..."
     systemctl stop frps
-    sleep 1
+    sleep 0.8
     systemctl start frps
     RET=$?
-    if [ ${RET} -eq 0 ];then
-        echo "✅ frps 已运行"
+    sleep 0.8
+    PID=$(get_frps_pid)
+    if [ ${RET} -eq 0 ] && [ -n "${PID}" ];then
+        echo "✅ frps 已运行 (pid ${PID})"
     else
         echo "❌ frps 重启失败"
     fi
     ;;
 status)
-    systemctl status frps
+    systemctl status frps --no-pager -l
+    PID=$(get_frps_pid)
+    echo "----------------------------------------"
+    if [ -n "${PID}" ];then
+        echo "🔎 frps 实际进程PID: ${PID}"
+    else
+        echo "🔎 frps 当前没有运行进程"
+    fi
     ;;
 enable)
     systemctl enable frps
@@ -442,10 +462,10 @@ log)
     ;;
 *)
     echo "frps 命令帮助："
-    echo "  start      启动服务"
+    echo "  start      启动服务，打印真实PID"
     echo "  stop       停止服务"
-    echo "  restart    重启服务"
-    echo "  status     查看运行状态"
+    echo "  restart    重启服务，打印新PID"
+    echo "  status     查看systemd状态 + 实际进程PID"
     echo "  enable     开启开机自启"
     echo "  disable    关闭开机自启"
     echo "  version    查看frps版本"
