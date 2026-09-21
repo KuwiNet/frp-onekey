@@ -50,5 +50,8 @@ frpc config    # 编辑配置
 logread -f | grep frpc # 实时日志
 ~~~
 ~~~bash
-用法: frpc {start|stop|restart|status|config|version}
+/etc/init.d/frpc enable  # 启用开机自启（install脚本已经自动执行过）
+~~~
+~~~bash
+/etc/init.d/frpc disable  # 关闭开机自启
 ~~~
