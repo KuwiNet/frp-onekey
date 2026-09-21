@@ -1,16 +1,18 @@
 #!/bin/sh
 # OpenWrt procd frpc onekey install script
-# ScriptVersion=2.1.6
+# ScriptVersion=2.1.7
 # Install dir: /root/frp
 # Procd init: /etc/init.d/frpc
-# User cmd: frp xxx
-SCRIPT_VERSION="2.1.6"
+# Real wrapper file: /usr/sbin/frpc-wrapper
+# Symlink: /usr/sbin/frpc  --> frpc-wrapper
+SCRIPT_VERSION="2.1.7"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
 FRPC_TOML="${INSTALL_DIR}/frpc.toml"
 INIT_FILE="/etc/init.d/frpc"
-BIN_LINK="/usr/sbin/frp"
+WRAPPER_BIN="/usr/sbin/frpc-wrapper"
+SYMLINK_BIN="/usr/sbin/frpc"
 
 check_and_install_deps() {
     echo "==> 检查OpenWrt依赖工具..."
@@ -334,7 +336,7 @@ AUTH
 }
 
 install_service() {
-# procd init脚本修复respawn，带重试次数，解决stop无限重启问题
+# procd init脚本，respawn带参数，解决stop无限重启
 cat > ${INIT_FILE} <<'EOF'
 #!/bin/sh /etc/rc.common
 USE_PROCD=1
@@ -348,7 +350,6 @@ CONFIG="/root/frp/frpc.toml"
 start_service() {
     procd_open_instance
     procd_set_param command "$BIN" -c "$CONFIG"
-    # respawn 最大重试3次，间隔5秒，总监控10秒，到达阈值后不再拉起，允许stop正常停止服务
     procd_set_param respawn 3 5 10
     procd_set_param stdout 1
     procd_set_param stderr 1
@@ -358,8 +359,8 @@ EOF
     chmod +x ${INIT_FILE}
     ${INIT_FILE} enable
 
-# 包装脚本 /usr/sbin/frp，名字不和init脚本frpc重名，杜绝PATH查找递归
-cat > ${BIN_LINK} <<'SHELL'
+# 真实包装脚本本体文件名：frpc‑wrapper
+cat > ${WRAPPER_BIN} <<'SHELL'
 #!/bin/sh
 FRPC_BIN="/root/frp/frpc-bin"
 
@@ -435,7 +436,7 @@ log)
     logread -f | grep frpc
     ;;
 *)
-    echo "frp 命令帮助："
+    echo "frpc 命令帮助："
     echo "  start      启动服务，打印真实PID"
     echo "  stop       停止服务"
     echo "  restart    重启服务，打印新PID"
@@ -450,9 +451,14 @@ log)
     ;;
 esac
 SHELL
-    chmod +x ${BIN_LINK}
+    chmod +x ${WRAPPER_BIN}
+
+    # 创建软链接 /usr/sbin/frpc 指向本体frpc‑wrapper
+    rm -f ${SYMLINK_BIN}
+    ln -s ${WRAPPER_BIN} ${SYMLINK_BIN}
+
     echo "✅ OpenWrt procd frpc服务安装完成"
-    echo "👉 用户操作命令：frp xxx"
+    echo "👉 用户操作命令：frpc xxx"
     echo "👉 底层原生命令：/etc/init.d/frpc xxx"
 }
 
@@ -500,7 +506,7 @@ action_install() {
     install_service
     echo "=============================================="
     echo "🎉 frpc 操作完成！目录：${INSTALL_DIR}"
-    echo "📋 用户命令：frp start|stop|restart|status|config|log|version"
+    echo "📋 用户命令：frpc start|stop|restart|status|config|log|version"
     echo "📄 配置文件：${FRPC_TOML}"
     echo "💡 procd原生命令示例：/etc/init.d/frpc start"
     echo "💡 二进制本体调用：${FRPC_BIN} --version"
@@ -523,7 +529,7 @@ action_update() {
 
 action_uninstall() {
     echo "===== 卸载frpc ====="
-    read -p "确认卸载frpc？停止服务、删除${INSTALL_DIR}、init脚本与frp命令 [Y/n] " ans
+    read -p "确认卸载frpc？停止服务、删除${INSTALL_DIR}、init脚本与命令 [Y/n] " ans
     ans=${ans:-Y}
     if [ ! "${ans}" = "Y" ] && [ ! "${ans}" = "y" ]; then
         echo "取消卸载"
@@ -532,7 +538,8 @@ action_uninstall() {
     /etc/init.d/frpc stop 2>/dev/null
     /etc/init.d/frpc disable 2>/dev/null
     rm -f ${INIT_FILE}
-    rm -f ${BIN_LINK}
+    rm -f ${WRAPPER_BIN}
+    rm -f ${SYMLINK_BIN}
     rm -rf ${INSTALL_DIR}
     echo "✅ 卸载完成"
 }
