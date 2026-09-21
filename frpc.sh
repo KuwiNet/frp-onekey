@@ -1,11 +1,11 @@
 #!/bin/sh
 # OpenWrt procd frpc onekey install script
-# ScriptVersion=2.1.2
+# ScriptVersion=2.1.3
 # Install dir: /root/frp
 # Procd init: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="2.1.2"
+SCRIPT_VERSION="2.1.3"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -335,6 +335,7 @@ AUTH
 }
 
 install_service() {
+# procd init脚本：移除EXTRA_COMMANDS，杜绝递归
 cat > ${INIT_FILE} <<'EOF'
 #!/bin/sh /etc/rc.common
 USE_PROCD=1
@@ -353,33 +354,15 @@ start_service() {
     procd_set_param stderr 1
     procd_close_instance
 }
-
-EXTRA_COMMANDS="version config log"
-EXTRA_HELP="    version    查看frpc版本
-    config     编辑frpc配置文件
-    log        实时查看frpc日志"
-
-version() {
-    "$BIN" --version
-}
-
-config() {
-    vi "$CONFIG"
-}
-
-log() {
-    echo "===== frpc 实时日志（Ctrl+C退出） ====="
-    logread -f | grep frpc
-}
 EOF
     chmod +x ${INIT_FILE}
     ${INIT_FILE} enable
 
 # 全局包装命令 /usr/sbin/frpc
+# 关键点：使用 service frpc xxx，**不调用 /etc/init.d/frpc 脚本，切断递归**
 cat > ${BIN_LINK} <<'SHELL'
 #!/bin/sh
 FRPC_BIN="/root/frp/frpc-bin"
-INIT="/etc/init.d/frpc"
 
 get_frpc_pid() {
     PID=$(ps | grep -v grep | grep "${FRPC_BIN}" | awk '{print $1}')
@@ -388,9 +371,9 @@ get_frpc_pid() {
 
 case "$1" in
 start)
-    ${INIT} start
+    service frpc start
     RET=$?
-    sleep 0.8
+    sleep 1
     PID=$(get_frpc_pid)
     if [ ${RET} -eq 0 ] && [ -n "${PID}" ];then
         echo "✅ frpc 已运行 (pid ${PID})"
@@ -400,9 +383,9 @@ start)
     ;;
 stop)
     echo "⏹ frpc 正在停止..."
-    ${INIT} stop
+    service frpc stop
     RET=$?
-    sleep 0.6
+    sleep 1
     PID=$(get_frpc_pid)
     if [ ${RET} -eq 0 ] && [ -z "${PID}" ];then
         echo "✅ frpc 已停止"
@@ -412,11 +395,11 @@ stop)
     ;;
 restart)
     echo "⏹ frpc 正在停止..."
-    ${INIT} stop
-    sleep 0.8
-    ${INIT} start
+    service frpc stop
+    sleep 1
+    service frpc start
     RET=$?
-    sleep 0.8
+    sleep 1
     PID=$(get_frpc_pid)
     if [ ${RET} -eq 0 ] && [ -n "${PID}" ];then
         echo "✅ frpc 已运行 (pid ${PID})"
@@ -425,7 +408,7 @@ restart)
     fi
     ;;
 status)
-    ${INIT} status
+    service frpc status
     PID=$(get_frpc_pid)
     echo "----------------------------------------"
     if [ -n "${PID}" ];then
@@ -435,21 +418,22 @@ status)
     fi
     ;;
 enable)
-    ${INIT} enable
+    service frpc enable
     echo "✅ frpc 已设置开机自启"
     ;;
 disable)
-    ${INIT} disable
+    service frpc disable
     echo "✅ frpc 已关闭开机自启"
     ;;
 version)
-    ${INIT} version
+    ${FRPC_BIN} --version
     ;;
 config)
-    ${INIT} config
+    vi /root/frp/frpc.toml
     ;;
 log)
-    ${INIT} log
+    echo "===== frpc 实时日志（Ctrl+C退出） ====="
+    logread -f | grep frpc
     ;;
 *)
     echo "frpc 命令帮助："
@@ -491,7 +475,7 @@ action_install() {
             upgrade_ans=${upgrade_ans:-Y}
             if [ "${upgrade_ans}" = "y" ] || [ "${upgrade_ans}" = "Y" ]; then
                 echo "停止frpc服务准备升级..."
-                ${INIT_FILE} stop 2>/dev/null
+                service frpc stop 2>/dev/null
                 download_frpc
                 echo "升级完成"
             else
@@ -524,7 +508,7 @@ action_install() {
     echo "   frpc config     编辑frpc.toml"
     echo "   frpc log        实时查看frpc日志"
     echo "📄 配置文件：${FRPC_TOML}"
-    echo "💡 procd原生命令示例：/etc/init.d/frpc start"
+    echo "💡 procd原生命令示例：service frpc start"
     echo "💡 二进制本体调用：${FRPC_BIN} --version"
     echo "=============================================="
 }
@@ -536,9 +520,9 @@ action_update() {
     get_arch
     get_frp_info
     echo "停止frpc..."
-    ${INIT_FILE} stop 2>/dev/null
+    service frpc stop 2>/dev/null
     download_frpc
-    ${INIT_FILE} start
+    service frpc start
     echo "✅ frpc更新完成"
     ${FRPC_BIN} --version
 }
@@ -551,8 +535,8 @@ action_uninstall() {
         echo "取消卸载"
         exit 0
     fi
-    ${INIT_FILE} stop 2>/dev/null
-    ${INIT_FILE} disable 2>/dev/null
+    service frpc stop 2>/dev/null
+    service frpc disable 2>/dev/null
     rm -f ${INIT_FILE}
     rm -f ${BIN_LINK}
     rm -rf ${INSTALL_DIR}
