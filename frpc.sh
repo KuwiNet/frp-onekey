@@ -1,12 +1,12 @@
 #!/bin/sh
 # OpenWrt frpc onekey install script
 # Repo: https://github.com/KuwiNet/frp-onekey/tree/openwrt
-# ScriptVersion=1.6.4
+# ScriptVersion=1.6.6
 # Frp install dir: /root/frp
 # Service: /etc/init.d/frpc
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="1.6.4"
+SCRIPT_VERSION="1.6.6"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -14,7 +14,7 @@ FRPC_TOML="${INSTALL_DIR}/frpc.toml"
 INIT_FILE="/etc/init.d/frpc"
 BIN_LINK="/usr/sbin/frpc"
 
-# 前置依赖检查并自动安装（tar curl wget）
+# 前置依赖检查并自动安装（tar curl wget hexdump）
 check_and_install_deps() {
     echo "==> 检查系统依赖工具..."
     NEED_INSTALL=""
@@ -31,6 +31,10 @@ check_and_install_deps() {
     if [ ${HAS_CURL} -eq 0 ] && [ ${HAS_WGET} -eq 0 ]; then
         echo "⚠️ 未检测到 wget/curl，需要安装 wget"
         NEED_INSTALL="${NEED_INSTALL} wget"
+    fi
+    if ! command -v hexdump >/dev/null; then
+        echo "⚠️ 未检测到 hexdump，需要安装"
+        NEED_INSTALL="${NEED_INSTALL} hexdump"
     fi
 
     # 有需要安装的包，且opkg可用（OpenWrt）
@@ -58,7 +62,8 @@ check_script_update() {
     if [ -n "${REMOTE_VER}" ]; then
         if [ "${REMOTE_VER}" != "${SCRIPT_VERSION}" ]; then
             echo "发现新版本脚本: ${REMOTE_VER} (当前:${SCRIPT_VERSION})"
-            read -p "是否自动更新脚本? [y/N] " ans
+            read -p "是否自动更新脚本? [Y/n] " ans
+            ans=${ans:-Y}
             if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
                 if command -v curl >/dev/null; then
                     curl -sL ${REMOTE_RAW_URL} -o ./${SCRIPT_NAME}
@@ -118,7 +123,7 @@ get_download_url() {
     echo "下载链接: ${DL_URL}"
 }
 
-# 下载并解压frpc，重命名为frpc-bin，改用gzip文件头校验，修复BusyBox tar误判
+# 下载并解压frpc，重命名为frpc-bin，gzip文件头校验
 download_frpc() {
     mkdir -p ${INSTALL_DIR}
     TMP_FILE="/tmp/frp.tar.gz"
@@ -132,7 +137,7 @@ download_frpc() {
         echo "❌ 下载失败！"
         exit 1
     fi
-    # 判断gzip文件头 1f 8b，不再用tar -tf校验（BusyBox tar容易误报）
+    # 判断gzip文件头 1f 8b
     FILE_HEAD=$(head -c2 ${TMP_FILE} | hexdump -ve '1/1 "%02x"')
     if [ "$FILE_HEAD" != "1f8b" ];then
         echo "❌ 下载的不是有效的gzip压缩包，链接获取错误！"
@@ -153,11 +158,12 @@ download_frpc() {
     echo "frpc二进制提取完成: ${FRPC_BIN}"
 }
 
-# 交互式生成frpc.toml，完全按你指定顺序与模板
+# 交互式生成frpc.toml
 gen_config() {
-    read -p "是否现在交互式填写frpc.toml配置(OIDC认证)? [y/N] " fillcfg
+    read -p "是否现在交互式填写frpc.toml配置(OIDC认证)? [Y/n] " fillcfg
+    fillcfg=${fillcfg:-Y}
     if [ "$fillcfg" != "y" ] && [ "$fillcfg" != "Y" ]; then
-        # 默认模板完全按你提供内容
+        # 默认模板：保留注释ssh代理示例块
         cat > ${FRPC_TOML} <<EOF
 # 提示：需要前往 https://www.afrp.net 注册获取
 serverAddr = "xx.afrp.net"
@@ -169,6 +175,7 @@ auth.oidc.clientSecret = "注册时保存的Client Secret"
 auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
 auth.oidc.audience = "afrp.net"
 auth.oidc.issuer = "afrp"
+
 # [[proxies]]
 # name = "ssh"
 # type = "tcp"
@@ -176,7 +183,7 @@ auth.oidc.issuer = "afrp"
 # localPort = 22
 # remotePort = 6000
 EOF
-        echo "已写入默认frpc.toml"
+        echo "已写入默认frpc.toml（保留ssh示例注释）"
         echo "后续修改配置: vim ${FRPC_TOML}"
         return
     fi
@@ -200,7 +207,7 @@ EOF
         echo "❌ serverPort不能为空，请重新输入！"
     done
 
-    # user 必填，修改提示文字
+    # user
     echo "提示：需要前往 https://www.afrp.net 注册获取"
     while true; do
         read -p "user(注册用户名，必填): " frp_user
@@ -210,7 +217,7 @@ EOF
         echo "❌ user不能为空，请重新输入！"
     done
 
-    # OIDC clientID 修改提示文字，保留非空校验
+    # OIDC clientID
     while true; do
         read -p "OIDC clientID(注册用户名，必填): " oidc_clientID
         if [ -n "${oidc_clientID}" ]; then
@@ -219,7 +226,7 @@ EOF
         echo "❌ clientID不能为空，请重新输入！"
     done
 
-    # OIDC clientSecret 增加非空校验
+    # OIDC clientSecret
     while true; do
         read -p "OIDC clientSecret(注册时保存的Client Secret，必填): " oidc_clientSecret
         if [ -n "${oidc_clientSecret}" ]; then
@@ -228,7 +235,7 @@ EOF
         echo "❌ clientSecret不能为空，请重新输入！"
     done
 
-    # 写入toml，严格按你指定顺序
+    # 交互式模式：基础配置，**不带ssh注释示例**
     cat > ${FRPC_TOML} <<EOF
 # 提示：需要前往 https://www.afrp.net 注册获取
 serverAddr = "${serverAddr}"
@@ -240,12 +247,6 @@ auth.oidc.clientSecret = "${oidc_clientSecret}"
 auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
 auth.oidc.audience = "afrp.net"
 auth.oidc.issuer = "afrp"
-# [[proxies]]
-# name = "ssh"
-# type = "tcp"
-# localIP = "127.0.0.1"
-# localPort = 22
-# remotePort = 6000
 EOF
 
     # 隧道循环添加
@@ -253,8 +254,8 @@ EOF
     while [ "$add_tunnel" = "y" ] || [ "$add_tunnel" = "Y" ]; do
         echo ""
         echo "==== 添加隧道 ===="
-        echo "隧道类型: 1=tcp  2=http  3=stcp  4=xtcp"
-        read -p "选择隧道类型 [1/2/3/4]: " ttype
+        echo "隧道类型: 1=tcp  2=http  3=https  4=stcp  5=xtcp"
+        read -p "选择隧道类型 [1/2/3/4/5]: " ttype
         read -p "隧道名称(唯一): " tname
         read -p "本地IP(默认127.0.0.1): " localIP
         localIP=${localIP:-127.0.0.1}
@@ -272,19 +273,38 @@ EOF
             ;;
         2)
             echo "type = \"http\"" >> ${FRPC_TOML}
-            read -p "customDomains 域名，逗号分隔: " domains
+            read -p "subdomain子域名(可不填，直接回车跳过): " subdomain
+            if [ -n "${subdomain}" ];then
+                echo "subdomain = \"${subdomain}\"" >> ${FRPC_TOML}
+            fi
+            read -p "customDomains 域名，逗号分隔(可不填): " domains
             echo "localIP = \"${localIP}\"" >> ${FRPC_TOML}
             echo "localPort = ${localPort}" >> ${FRPC_TOML}
-            echo "customDomains = [\"${domains}\"]" >> ${FRPC_TOML}
+            if [ -n "${domains}" ];then
+                echo "customDomains = [\"${domains}\"]" >> ${FRPC_TOML}
+            fi
             ;;
         3)
+            echo "type = \"https\"" >> ${FRPC_TOML}
+            read -p "subdomain子域名(可不填，直接回车跳过): " subdomain
+            if [ -n "${subdomain}" ];then
+                echo "subdomain = \"${subdomain}\"" >> ${FRPC_TOML}
+            fi
+            read -p "customDomains 域名，逗号分隔(可不填): " domains
+            echo "localIP = \"${localIP}\"" >> ${FRPC_TOML}
+            echo "localPort = ${localPort}" >> ${FRPC_TOML}
+            if [ -n "${domains}" ];then
+                echo "customDomains = [\"${domains}\"]" >> ${FRPC_TOML}
+            fi
+            ;;
+        4)
             echo "type = \"stcp\"" >> ${FRPC_TOML}
             read -p "secretKey: " sk
             echo "localIP = \"${localIP}\"" >> ${FRPC_TOML}
             echo "localPort = ${localPort}" >> ${FRPC_TOML}
             echo "secretKey = \"${sk}\"" >> ${FRPC_TOML}
             ;;
-        4)
+        5)
             echo "type = \"xtcp\"" >> ${FRPC_TOML}
             read -p "secretKey: " sk
             echo "localIP = \"${localIP}\"" >> ${FRPC_TOML}
@@ -293,7 +313,8 @@ EOF
             ;;
         esac
         echo "" >> ${FRPC_TOML}
-        read -p "继续添加隧道？[y/N]" add_tunnel
+        read -p "继续添加隧道？[Y/n]" add_tunnel
+        add_tunnel=${add_tunnel:-Y}
     done
     echo "✅ 配置写入完成: ${FRPC_TOML}"
 }
@@ -386,7 +407,8 @@ action_update() {
 # uninstall 卸载
 action_uninstall() {
     echo "===== 卸载frpc ====="
-    read -p "确认卸载frpc？会停止服务并删除/root/frp目录 [y/N] " ans
+    read -p "确认卸载frpc？会停止服务并删除/root/frp目录 [Y/n] " ans
+    ans=${ans:-Y}
     if [ "$ans" != "y" ] && [ "$ans" != "Y" ]; then
         echo "取消卸载"
         exit 0
