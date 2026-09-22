@@ -110,8 +110,8 @@ get_frp_info() {
     echo "请选择下载区域："
     echo "1) 国内(github proxy镜像，默认)"
     echo "2) 国外(github官方)"
-    read -p "输入选项 [1/2] (默认1): " area
-    area=${area:-1}
+    read -p "输入选项 [1/2] (默认2): " area
+    area=${area:-2}
 
     API_RAW="https://api.github.com/repos/fatedier/frp/releases/latest"
     if [[ "${area}" == "1" ]];then
