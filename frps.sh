@@ -1,11 +1,11 @@
 #!/bin/bash
 # Linux systemd frps onekey install script
-# ScriptVersion=2.2.5
+# ScriptVersion=2.2.6
 # Install dir: /opt/frps
 # Systemd service: /etc/systemd/system/frps.service
 # Cmd: frps xxx
 
-SCRIPT_VERSION="2.2.5"
+SCRIPT_VERSION="2.2.6"
 SCRIPT_NAME="frps.sh"
 INSTALL_DIR="/opt/frps"
 FRPS_BIN="${INSTALL_DIR}/frps-bin"
@@ -218,7 +218,6 @@ log.disablePrintColor = false
 auth.method = "oidc"
 auth.oidc.issuer = "https://www.afrp.net"
 auth.oidc.audience = "afrp.net"
-auth.oidc.scope = "afrp"
 # auth.method = "token"
 # auth.token = "afrp.net"
 allowPorts = [
@@ -264,7 +263,6 @@ EOF
 
     oidc_issuer=""
     oidc_audience=""
-    oidc_scope=""
     auth_token=""
     subDomainHost=""
 
@@ -274,8 +272,6 @@ EOF
         oidc_issuer=${oidc_issuer:-"https://www.afrp.net"}
         read -p "auth.oidc.audience (默认afrp.net): " oidc_audience
         oidc_audience=${oidc_audience:-"afrp.net"}
-        read -p "auth.oidc.scope (默认afrp): " oidc_scope
-        oidc_scope=${oidc_scope:-"afrp"}
         read -p "subDomainHost (默认example.com): " subDomainHost
         subDomainHost=${subDomainHost:-"example.com"}
 
@@ -283,7 +279,6 @@ cat >> ${FRPS_TOML} <<AUTH
 auth.method = "oidc"
 auth.oidc.issuer = "${oidc_issuer}"
 auth.oidc.audience = "${oidc_audience}"
-auth.oidc.scope = "${oidc_scope}"
 # auth.method = "token"
 # auth.token = "afrp.net"
 AUTH
@@ -300,7 +295,6 @@ auth.token = "${auth_token}"
 # auth.method = "oidc"
 # auth.oidc.issuer = "https://www.afrp.net"
 # auth.oidc.audience = "afrp.net"
-# auth.oidc.scope = "afrp"
 AUTH
     fi
 
