@@ -6,8 +6,14 @@ Frp 是一个高性能的反向代理应用，可以帮助您轻松地进行内�
 
 ### 操作方法
 #### 一、安装
+国际用户：
 ```shell
 wget https://raw.githubusercontent.com/KuwiNet/frp-onekey/openwrt/frpc.sh -O frpc.sh && chmod +x frpc.sh
+./frpc.sh install
+```
+国内用户：
+```shell
+wget https://arelay.cn/raw.githubusercontent.com/KuwiNet/frp-onekey/openwrt/frpc.sh -O frpc.sh && chmod +x frpc.sh
 ./frpc.sh install
 ```
 #### 二、修改Frpc配置
