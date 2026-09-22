@@ -1,17 +1,17 @@
 #!/bin/bash
 # Linux systemd frpc onekey install script
-# ScriptVersion=2.2.4
+# ScriptVersion=2.2.5
 # Install dir: /opt/frpc
 # Systemd service: /etc/systemd/system/frpc.service
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="2.2.4"
+SCRIPT_VERSION="2.2.5"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/opt/frpc"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
 FRPC_TOML="${INSTALL_DIR}/frpc.toml"
 SYSTEMD_UNIT="/etc/systemd/system/frpc.service"
-BIN_LINK="/usr/local/bin/frpc"
+BIN_LINK="/usr/bin/frpc"
 
 check_and_install_deps() {
     echo "==> 检查系统依赖工具..."
@@ -50,7 +50,6 @@ check_script_update() {
     REMOTE_RAW_URL=""
     REMOTE_VER=""
 
-    # 优先国内ghproxy代理
     if command -v curl &>/dev/null;then
         REMOTE_VER=$(curl -sL -m 8 "${PROXY_GH}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
     elif command -v wget &>/dev/null;then
@@ -61,7 +60,6 @@ check_script_update() {
         REMOTE_RAW_URL="${PROXY_GH}"
     else
         echo "⚠️ ghproxy代理访问失败，尝试直连GitHub源"
-        # 降级原生github raw
         if command -v curl &>/dev/null;then
             REMOTE_VER=$(curl -sL -m 8 "${GITHUB_RAW}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
         elif command -v wget &>/dev/null;then
@@ -158,7 +156,6 @@ download_frpc() {
         echo "❌ 下载失败！"
         exit 1
     fi
-    # 使用od系统内置工具校验gzip魔数(0x1f8b)，不再依赖hexdump/bsdmainutils
     FILE_HEAD=$(head -c2 "${TMP_FILE}" | od -An -tx1 | tr -d ' \n')
     if [[ "${FILE_HEAD}" != "1f8b" ]];then
         echo "❌ 下载的不是有效的gzip压缩包，链接获取错误！"
