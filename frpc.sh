@@ -1,19 +1,18 @@
 #!/bin/bash
 # Linux systemd frpc onekey install script
-# ScriptVersion=2.1.1
-# Install dir: /opt/frp
+# ScriptVersion=2.2.3
+# Install dir: /opt/frpc
 # Systemd service: /etc/systemd/system/frpc.service
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="2.1.1"
+SCRIPT_VERSION="2.2.3"
 SCRIPT_NAME="frpc.sh"
-INSTALL_DIR="/opt/frp"
+INSTALL_DIR="/opt/frpc"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
 FRPC_TOML="${INSTALL_DIR}/frpc.toml"
 SYSTEMD_UNIT="/etc/systemd/system/frpc.service"
 BIN_LINK="/usr/local/bin/frpc"
 
-# 依赖检查，输出对应发行版安装提示
 check_and_install_deps() {
     echo "==> 检查系统依赖工具..."
     NEED=""
@@ -48,7 +47,6 @@ check_and_install_deps() {
     fi
 }
 
-# 脚本自身版本检测更新：优先github raw，失败自动降级gitee国内镜像
 check_script_update() {
     echo "==> 检查脚本版本更新..."
     GITHUB_RAW="https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh"
@@ -97,7 +95,6 @@ check_script_update() {
     fi
 }
 
-# 获取系统架构
 get_arch() {
     ARCH=$(uname -m)
     case $ARCH in
@@ -111,7 +108,6 @@ get_arch() {
     echo "检测架构: ${PLATFORM}"
 }
 
-# 获取线上frp最新版本与frpc下载链接，默认1国内镜像
 get_frp_info() {
     echo "----------------------------------------"
     echo "请选择下载区域："
@@ -147,7 +143,6 @@ get_frp_info() {
     echo "下载链接: ${DL_URL}"
 }
 
-# 下载解压frpc二进制，gzip头校验
 download_frpc() {
     mkdir -p ${INSTALL_DIR}
     TMP_FILE="/tmp/frp.tar.gz"
@@ -184,7 +179,6 @@ download_frpc() {
     echo "frpc二进制提取完成: ${FRPC_BIN}"
 }
 
-# 交互式生成frpc.toml OIDC / Token二选一认证
 gen_config() {
     read -p "是否现在交互式填写frpc.toml客户端配置? [Y/n] " fillcfg
     fillcfg=${fillcfg:-Y}
@@ -197,11 +191,12 @@ user = "username"
 
 # --------认证二选一，请取消对应注释-----------
 # OIDC认证
-# auth.method = "oidc"
-# auth.oidc.clientID = "username"
-# auth.oidc.clientSecret = "secret"
-# auth.oidc.issuer = "https://oidc.afrp.net"
-# auth.oidc.audience = "afrp.net"
+auth.method = "oidc"
+auth.oidc.clientID = "username"
+auth.oidc.clientSecret = "secret"
+auth.oidc.issuer = "https://www.afrp.net"
+auth.oidc.audience = "afrp.net"
+auth.oidc.scope = "afrp"
 
 # Token认证
 # auth.method = "token"
@@ -227,18 +222,18 @@ EOF
     echo "===== 填写frpc基础参数 ====="
     while true; do
         read -p "serverAddr(服务端域名/IP，必填): " serverAddr
-        [[ -n "${serverAddr}" ]] && break
+        [ -n "${serverAddr}" ] && break
         echo "❌ serverAddr不能为空，请重新输入！"
     done
     while true; do
         read -p "serverPort(服务端端口，必填，默认7000): " serverPort
         serverPort=${serverPort:-7000}
-        [[ -n "${serverPort}" ]] && break
+        [ -n "${serverPort}" ] && break
         echo "❌ serverPort不能为空，请重新输入！"
     done
     while true; do
         read -p "user(客户端用户名，必填): " frp_user
-        [[ -n "${frp_user}" ]] && break
+        [ -n "${frp_user}" ] && break
         echo "❌ user不能为空，请重新输入！"
     done
 
@@ -246,6 +241,7 @@ EOF
     oidc_clientSecret=""
     oidc_issuer=""
     oidc_audience=""
+    oidc_scope=""
     auth_token=""
     if [[ "${auth_mode}" == "1" ]];then
         echo "----- OIDC认证参数 -----"
@@ -257,8 +253,10 @@ EOF
             read -p "auth.oidc.clientID: " oidc_clientID
         fi
         read -p "auth.oidc.clientSecret: " oidc_clientSecret
-        read -p "auth.oidc.issuer(例如 https://oidc.afrp.net): " oidc_issuer
+        read -p "auth.oidc.issuer(例如 https://www.afrp.net): " oidc_issuer
         read -p "auth.oidc.audience(例如 afrp.net): " oidc_audience
+        read -p "auth.oidc.scope (默认afrp): " oidc_scope
+        oidc_scope=${oidc_scope:-"afrp"}
     else
         echo "----- Token认证参数 -----"
         read -p "auth.token: " auth_token
@@ -277,6 +275,7 @@ auth.oidc.clientID = "${oidc_clientID}"
 auth.oidc.clientSecret = "${oidc_clientSecret}"
 auth.oidc.issuer = "${oidc_issuer}"
 auth.oidc.audience = "${oidc_audience}"
+auth.oidc.scope = "${oidc_scope}"
 
 # auth.method = "token"
 # auth.token = "your-token-here"
@@ -289,8 +288,9 @@ auth.token = "${auth_token}"
 # auth.method = "oidc"
 # auth.oidc.clientID = "${frp_user}"
 # auth.oidc.clientSecret = "secret"
-# auth.oidc.issuer = "https://oidc.afrp.net"
+# auth.oidc.issuer = "https://www.afrp.net"
 # auth.oidc.audience = "afrp.net"
+# auth.oidc.scope = "afrp"
 AUTH
     fi
 
@@ -318,20 +318,20 @@ AUTH
         2)
             echo "type = \"http\"" >> ${FRPC_TOML}
             read -p "subdomain子域名(可不填，直接回车跳过): " subdomain
-            [[ -n "${subdomain}" ]] && echo "subdomain = \"${subdomain}\"" >> ${FRPC_TOML}
+            [ -n "${subdomain}" ] && echo "subdomain = \"${subdomain}\"" >> ${FRPC_TOML}
             read -p "customDomains 域名，逗号分隔(可不填): " domains
             echo "localIP = \"${localIP}\"" >> ${FRPC_TOML}
             echo "localPort = ${localPort}" >> ${FRPC_TOML}
-            [[ -n "${domains}" ]] && echo "customDomains = [\"${domains}\"]" >> ${FRPC_TOML}
+            [ -n "${domains}" ] && echo "customDomains = [\"${domains}\"]" >> ${FRPC_TOML}
             ;;
         3)
             echo "type = \"https\"" >> ${FRPC_TOML}
             read -p "subdomain子域名(可不填，直接回车跳过): " subdomain
-            [[ -n "${subdomain}" ]] && echo "subdomain = \"${subdomain}\"" >> ${FRPC_TOML}
+            [ -n "${subdomain}" ] && echo "subdomain = \"${subdomain}\"" >> ${FRPC_TOML}
             read -p "customDomains 域名，逗号分隔(可不填): " domains
             echo "localIP = \"${localIP}\"" >> ${FRPC_TOML}
             echo "localPort = ${localPort}" >> ${FRPC_TOML}
-            [[ -n "${domains}" ]] && echo "customDomains = [\"${domains}\"]" >> ${FRPC_TOML}
+            [ -n "${domains}" ] && echo "customDomains = [\"${domains}\"]" >> ${FRPC_TOML}
             ;;
         4)
             echo "type = \"stcp\"" >> ${FRPC_TOML}
@@ -355,7 +355,6 @@ AUTH
     echo "✅ 配置写入完成: ${FRPC_TOML}"
 }
 
-# 生成systemd + 包装脚本，增加真实PID获取，对齐frps输出风格
 install_service() {
 cat > ${SYSTEMD_UNIT} <<EOF
 [Unit]
@@ -364,6 +363,7 @@ After=network.target
 
 [Service]
 Type=simple
+WorkingDirectory=/opt/frpc
 ExecStart=${FRPC_BIN} -c ${FRPC_TOML}
 Restart=on-failure
 RestartSec=5
@@ -375,8 +375,8 @@ EOF
 
 cat > ${BIN_LINK} <<'SHELL'
 #!/bin/bash
-FRPC_BIN="/opt/frp/frpc-bin"
-FRPC_TOML="/opt/frp/frpc.toml"
+FRPC_BIN="/opt/frpc/frpc-bin"
+FRPC_TOML="/opt/frpc/frpc.toml"
 
 get_frpc_pid() {
     PID=$(ps -ef | grep -v grep | grep "${FRPC_BIN}" | awk '{print $2}')
@@ -466,7 +466,7 @@ SHELL
     chmod +x ${BIN_LINK}
     systemctl daemon-reload
     systemctl enable frpc
-    echo "✅ systemd frpc服务安装完成，已设置开机自启，命令 frpc xxx 就绪"
+    echo "✅ systemd frpc客户端服务安装完成，已设置开机自启，命令 frpc xxx 就绪"
 }
 
 action_install() {
