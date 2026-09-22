@@ -1,18 +1,18 @@
 #!/bin/bash
 # Linux systemd frps onekey install script
-# ScriptVersion=2.2.2
+# ScriptVersion=2.2.5
 # Install dir: /opt/frps
 # Systemd service: /etc/systemd/system/frps.service
 # Cmd: frps xxx
 
-SCRIPT_VERSION="2.2.2"
+SCRIPT_VERSION="2.2.5"
 SCRIPT_NAME="frps.sh"
 INSTALL_DIR="/opt/frps"
 FRPS_BIN="${INSTALL_DIR}/frps-bin"
 FRPS_TOML="${INSTALL_DIR}/frps.toml"
 CUSTOM_404="${INSTALL_DIR}/404.html"
 SYSTEMD_UNIT="/etc/systemd/system/frps.service"
-BIN_LINK="/usr/local/bin/frps"
+BIN_LINK="/usr/bin/frps"
 
 check_and_install_deps() {
     echo "==> 检查系统依赖工具..."
@@ -27,10 +27,6 @@ check_and_install_deps() {
     if [[ ${HAS_CURL} -eq 0 && ${HAS_WGET} -eq 0 ]];then
         echo "⚠️ 缺失 curl/wget，至少需要其一"
         NEED="${NEED} curl"
-    fi
-    if ! command -v hexdump &>/dev/null;then
-        echo "⚠️ 缺失 hexdump"
-        NEED="${NEED} bsdmainutils"
     fi
 
     if [[ -n "${NEED}" ]];then
@@ -51,26 +47,26 @@ check_and_install_deps() {
 check_script_update() {
     echo "==> 检查脚本版本更新..."
     GITHUB_RAW="https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh"
-    GITEE_RAW="https://shturl.cc/TBZFMWpdM0D-onekey/raw/master/frps.sh"
+    PROXY_GH="https://mirror.ghproxy.com/${GITHUB_RAW}"
     REMOTE_RAW_URL=""
     REMOTE_VER=""
 
     if command -v curl &>/dev/null;then
-        REMOTE_VER=$(curl -sL -m 8 ${GITHUB_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+        REMOTE_VER=$(curl -sL -m 8 "${PROXY_GH}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
     elif command -v wget &>/dev/null;then
-        REMOTE_VER=$(wget -q -T 8 -O- ${GITHUB_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+        REMOTE_VER=$(wget -q -T 8 -O- "${PROXY_GH}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
     fi
 
     if [[ -n "${REMOTE_VER}" ]];then
-        REMOTE_RAW_URL="${GITHUB_RAW}"
+        REMOTE_RAW_URL="${PROXY_GH}"
     else
-        echo "⚠️ GitHub raw访问失败，尝试切换Gitee国内镜像源"
+        echo "⚠️ ghproxy代理访问失败，尝试直连GitHub源"
         if command -v curl &>/dev/null;then
-            REMOTE_VER=$(curl -sL -m 8 ${GITEE_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+            REMOTE_VER=$(curl -sL -m 8 "${GITHUB_RAW}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
         elif command -v wget &>/dev/null;then
-            REMOTE_VER=$(wget -q -T 8 -O- ${GITEE_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+            REMOTE_VER=$(wget -q -T 8 -O- "${GITHUB_RAW}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
         fi
-        REMOTE_RAW_URL="${GITEE_RAW}"
+        REMOTE_RAW_URL="${GITHUB_RAW}"
     fi
 
     if [[ -n "${REMOTE_VER}" ]];then
@@ -80,9 +76,9 @@ check_script_update() {
             ans=${ans:-Y}
             if [[ "${ans}" =~ ^[Yy]$ ]];then
                 if command -v curl &>/dev/null;then
-                    curl -sL ${REMOTE_RAW_URL} -o ./${SCRIPT_NAME}
+                    curl -sL "${REMOTE_RAW_URL}" -o ./${SCRIPT_NAME}
                 else
-                    wget -q ${REMOTE_RAW_URL} -O ./${SCRIPT_NAME}
+                    wget -q "${REMOTE_RAW_URL}" -O ./${SCRIPT_NAME}
                 fi
                 chmod +x ./${SCRIPT_NAME}
                 echo "脚本更新完成，请重新执行 ./${SCRIPT_NAME} $1"
@@ -92,7 +88,7 @@ check_script_update() {
             echo "脚本已是最新版本"
         fi
     else
-        echo "⚠️ GitHub/Gitee均无法访问，跳过脚本版本检测"
+        echo "⚠️ ghproxy与GitHub均无法访问，跳过脚本版本检测"
     fi
 }
 
@@ -161,7 +157,7 @@ download_frps() {
         echo "❌ 下载失败！"
         exit 1
     fi
-    FILE_HEAD=$(head -c2 ${TMP_FILE} | hexdump -ve '1/1 "%02x"')
+    FILE_HEAD=$(head -c2 "${TMP_FILE}" | od -An -tx1 | tr -d ' \n')
     if [[ "${FILE_HEAD}" != "1f8b" ]];then
         echo "❌ 下载的不是有效的gzip压缩包，链接获取错误！"
         rm -f ${TMP_FILE}
@@ -222,6 +218,7 @@ log.disablePrintColor = false
 auth.method = "oidc"
 auth.oidc.issuer = "https://www.afrp.net"
 auth.oidc.audience = "afrp.net"
+auth.oidc.scope = "afrp"
 # auth.method = "token"
 # auth.token = "afrp.net"
 allowPorts = [
@@ -267,6 +264,7 @@ EOF
 
     oidc_issuer=""
     oidc_audience=""
+    oidc_scope=""
     auth_token=""
     subDomainHost=""
 
@@ -276,6 +274,8 @@ EOF
         oidc_issuer=${oidc_issuer:-"https://www.afrp.net"}
         read -p "auth.oidc.audience (默认afrp.net): " oidc_audience
         oidc_audience=${oidc_audience:-"afrp.net"}
+        read -p "auth.oidc.scope (默认afrp): " oidc_scope
+        oidc_scope=${oidc_scope:-"afrp"}
         read -p "subDomainHost (默认example.com): " subDomainHost
         subDomainHost=${subDomainHost:-"example.com"}
 
@@ -283,6 +283,7 @@ cat >> ${FRPS_TOML} <<AUTH
 auth.method = "oidc"
 auth.oidc.issuer = "${oidc_issuer}"
 auth.oidc.audience = "${oidc_audience}"
+auth.oidc.scope = "${oidc_scope}"
 # auth.method = "token"
 # auth.token = "afrp.net"
 AUTH
@@ -299,14 +300,13 @@ auth.token = "${auth_token}"
 # auth.method = "oidc"
 # auth.oidc.issuer = "https://www.afrp.net"
 # auth.oidc.audience = "afrp.net"
+# auth.oidc.scope = "afrp"
 AUTH
     fi
 
-    # 是否开启高级自定义选项，默认N
     read -p "是否开启toml高级自定义选项? [Y/n] (默认N): " adv_opt
     adv_opt=${adv_opt:-N}
 
-    # 先写入基础公共固定片段
 cat >> ${FRPS_TOML} <<BASE
 allowPorts = [
   { single = 80 },
@@ -350,7 +350,6 @@ BASE
         fi
     fi
 
-    # 写入webserver剩余
 cat >> ${FRPS_TOML} <<WEB
 webServer.user = "${webUser}"
 webServer.password = "${webPass}"
@@ -364,13 +363,11 @@ transport.maxPoolCount = ${maxPool}
 custom404Page = "/opt/frps/404.html"
 WEB
 
-    # 非空才写入allowUsers
     if [[ -n "${allowUsers}" ]];then
 cat >> ${FRPS_TOML} <<AU
 allowUsers = [$(echo "\"${allowUsers}\"" | sed 's/,/","/g')]
 AU
     fi
-    # token模式非空写入additionalTokens
     if [[ "${auth_mode}" == "2" && -n "${additionalTokens}" ]];then
 cat >> ${FRPS_TOML} <<AT
 additionalTokens = [$(echo "\"${additionalTokens}\"" | sed 's/,/","/g')]
@@ -616,7 +613,7 @@ main() {
 
 if [[ $EUID -ne 0 ]];then
     echo "❌ 必须使用root/sudo执行本脚本！"
-    exit 1
+    exit 0
 fi
 
 main "$@"
