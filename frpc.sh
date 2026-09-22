@@ -1,11 +1,11 @@
 #!/bin/bash
 # Linux systemd frpc onekey install script
-# ScriptVersion=2.2.3
+# ScriptVersion=2.2.4
 # Install dir: /opt/frpc
 # Systemd service: /etc/systemd/system/frpc.service
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="2.2.3"
+SCRIPT_VERSION="2.2.4"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/opt/frpc"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -27,10 +27,6 @@ check_and_install_deps() {
         echo "⚠️ 缺失 curl/wget，至少需要其一"
         NEED="${NEED} curl"
     fi
-    if ! command -v hexdump &>/dev/null;then
-        echo "⚠️ 缺失 hexdump"
-        NEED="${NEED} bsdmainutils"
-    fi
 
     if [[ -n "${NEED}" ]];then
         echo ""
@@ -50,26 +46,28 @@ check_and_install_deps() {
 check_script_update() {
     echo "==> 检查脚本版本更新..."
     GITHUB_RAW="https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh"
-    GITEE_RAW="https://shturl.cc/TBZFMWpdM0D-onekey/raw/master/frpc.sh"
+    PROXY_GH="https://mirror.ghproxy.com/${GITHUB_RAW}"
     REMOTE_RAW_URL=""
     REMOTE_VER=""
 
+    # 优先国内ghproxy代理
     if command -v curl &>/dev/null;then
-        REMOTE_VER=$(curl -sL -m 8 ${GITHUB_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+        REMOTE_VER=$(curl -sL -m 8 "${PROXY_GH}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
     elif command -v wget &>/dev/null;then
-        REMOTE_VER=$(wget -q -T 8 -O- ${GITHUB_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+        REMOTE_VER=$(wget -q -T 8 -O- "${PROXY_GH}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
     fi
 
     if [[ -n "${REMOTE_VER}" ]];then
-        REMOTE_RAW_URL="${GITHUB_RAW}"
+        REMOTE_RAW_URL="${PROXY_GH}"
     else
-        echo "⚠️ GitHub raw访问失败，尝试切换Gitee国内镜像源"
+        echo "⚠️ ghproxy代理访问失败，尝试直连GitHub源"
+        # 降级原生github raw
         if command -v curl &>/dev/null;then
-            REMOTE_VER=$(curl -sL -m 8 ${GITEE_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+            REMOTE_VER=$(curl -sL -m 8 "${GITHUB_RAW}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
         elif command -v wget &>/dev/null;then
-            REMOTE_VER=$(wget -q -T 8 -O- ${GITEE_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+            REMOTE_VER=$(wget -q -T 8 -O- "${GITHUB_RAW}" 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
         fi
-        REMOTE_RAW_URL="${GITEE_RAW}"
+        REMOTE_RAW_URL="${GITHUB_RAW}"
     fi
 
     if [[ -n "${REMOTE_VER}" ]];then
@@ -79,9 +77,9 @@ check_script_update() {
             ans=${ans:-Y}
             if [[ "${ans}" =~ ^[Yy]$ ]];then
                 if command -v curl &>/dev/null;then
-                    curl -sL ${REMOTE_RAW_URL} -o ./${SCRIPT_NAME}
+                    curl -sL "${REMOTE_RAW_URL}" -o ./${SCRIPT_NAME}
                 else
-                    wget -q ${REMOTE_RAW_URL} -O ./${SCRIPT_NAME}
+                    wget -q "${REMOTE_RAW_URL}" -O ./${SCRIPT_NAME}
                 fi
                 chmod +x ./${SCRIPT_NAME}
                 echo "脚本更新完成，请重新执行 ./${SCRIPT_NAME} $1"
@@ -91,7 +89,7 @@ check_script_update() {
             echo "脚本已是最新版本"
         fi
     else
-        echo "⚠️ GitHub/Gitee均无法访问，跳过脚本版本检测"
+        echo "⚠️ ghproxy与GitHub均无法访问，跳过脚本版本检测"
     fi
 }
 
@@ -160,7 +158,8 @@ download_frpc() {
         echo "❌ 下载失败！"
         exit 1
     fi
-    FILE_HEAD=$(head -c2 ${TMP_FILE} | hexdump -ve '1/1 "%02x"')
+    # 使用od系统内置工具校验gzip魔数(0x1f8b)，不再依赖hexdump/bsdmainutils
+    FILE_HEAD=$(head -c2 "${TMP_FILE}" | od -An -tx1 | tr -d ' \n')
     if [[ "${FILE_HEAD}" != "1f8b" ]];then
         echo "❌ 下载的不是有效的gzip压缩包，链接获取错误！"
         rm -f ${TMP_FILE}
@@ -191,12 +190,13 @@ user = "username"
 
 # --------认证二选一，请取消对应注释-----------
 # OIDC认证
-auth.method = "oidc"
-auth.oidc.clientID = "username"
-auth.oidc.clientSecret = "secret"
-auth.oidc.issuer = "https://www.afrp.net"
-auth.oidc.audience = "afrp.net"
-auth.oidc.scope = "afrp"
+# auth.method = "oidc"
+# auth.oidc.clientID = "username"
+# auth.oidc.clientSecret = "secret"
+# auth.oidc.issuer = "https://oidc.afrp.net"
+# auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
+# auth.oidc.audience = "afrp.net"
+# auth.oidc.scope = "afrp"
 
 # Token认证
 # auth.method = "token"
@@ -242,6 +242,7 @@ EOF
     oidc_issuer=""
     oidc_audience=""
     oidc_scope=""
+    oidc_tokenEndpointURL=""
     auth_token=""
     if [[ "${auth_mode}" == "1" ]];then
         echo "----- OIDC认证参数 -----"
@@ -253,7 +254,9 @@ EOF
             read -p "auth.oidc.clientID: " oidc_clientID
         fi
         read -p "auth.oidc.clientSecret: " oidc_clientSecret
-        read -p "auth.oidc.issuer(例如 https://www.afrp.net): " oidc_issuer
+        read -p "auth.oidc.issuer(例如 https://oidc.afrp.net): " oidc_issuer
+        read -p "auth.oidc.tokenEndpointURL (默认https://www.afrp.net/oidc/token.php): " oidc_tokenEndpointURL
+        oidc_tokenEndpointURL=${oidc_tokenEndpointURL:-"https://www.afrp.net/oidc/token.php"}
         read -p "auth.oidc.audience(例如 afrp.net): " oidc_audience
         read -p "auth.oidc.scope (默认afrp): " oidc_scope
         oidc_scope=${oidc_scope:-"afrp"}
@@ -274,6 +277,7 @@ auth.method = "oidc"
 auth.oidc.clientID = "${oidc_clientID}"
 auth.oidc.clientSecret = "${oidc_clientSecret}"
 auth.oidc.issuer = "${oidc_issuer}"
+auth.oidc.tokenEndpointURL = "${oidc_tokenEndpointURL}"
 auth.oidc.audience = "${oidc_audience}"
 auth.oidc.scope = "${oidc_scope}"
 
@@ -288,7 +292,8 @@ auth.token = "${auth_token}"
 # auth.method = "oidc"
 # auth.oidc.clientID = "${frp_user}"
 # auth.oidc.clientSecret = "secret"
-# auth.oidc.issuer = "https://www.afrp.net"
+# auth.oidc.issuer = "https://oidc.afrp.net"
+# auth.oidc.tokenEndpointURL = "https://www.afrp.net/oidc/token.php"
 # auth.oidc.audience = "afrp.net"
 # auth.oidc.scope = "afrp"
 AUTH
@@ -587,7 +592,7 @@ main() {
 
 if [[ $EUID -ne 0 ]];then
     echo "❌ 必须使用root/sudo执行本脚本！"
-    exit 1
+    exit 0
 fi
 
 main "$@"
