@@ -1,19 +1,19 @@
 #!/bin/bash
 # Linux systemd frps onekey install script
-# ScriptVersion=2.1.1
+# ScriptVersion=2.2.2
 # Install dir: /opt/frps
 # Systemd service: /etc/systemd/system/frps.service
 # Cmd: frps xxx
 
-SCRIPT_VERSION="2.1.1"
+SCRIPT_VERSION="2.2.2"
 SCRIPT_NAME="frps.sh"
 INSTALL_DIR="/opt/frps"
 FRPS_BIN="${INSTALL_DIR}/frps-bin"
 FRPS_TOML="${INSTALL_DIR}/frps.toml"
+CUSTOM_404="${INSTALL_DIR}/404.html"
 SYSTEMD_UNIT="/etc/systemd/system/frps.service"
 BIN_LINK="/usr/local/bin/frps"
 
-# 依赖检查，输出对应发行版安装提示
 check_and_install_deps() {
     echo "==> 检查系统依赖工具..."
     NEED=""
@@ -48,7 +48,6 @@ check_and_install_deps() {
     fi
 }
 
-# 脚本自身版本检测更新：优先github raw，失败自动降级gitee国内镜像
 check_script_update() {
     echo "==> 检查脚本版本更新..."
     GITHUB_RAW="https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh"
@@ -56,7 +55,6 @@ check_script_update() {
     REMOTE_RAW_URL=""
     REMOTE_VER=""
 
-    # 先尝试github源
     if command -v curl &>/dev/null;then
         REMOTE_VER=$(curl -sL -m 8 ${GITHUB_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
     elif command -v wget &>/dev/null;then
@@ -67,7 +65,6 @@ check_script_update() {
         REMOTE_RAW_URL="${GITHUB_RAW}"
     else
         echo "⚠️ GitHub raw访问失败，尝试切换Gitee国内镜像源"
-        # 降级gitee
         if command -v curl &>/dev/null;then
             REMOTE_VER=$(curl -sL -m 8 ${GITEE_RAW} 2>/dev/null | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
         elif command -v wget &>/dev/null;then
@@ -99,7 +96,6 @@ check_script_update() {
     fi
 }
 
-# 获取系统架构
 get_arch() {
     ARCH=$(uname -m)
     case $ARCH in
@@ -113,14 +109,13 @@ get_arch() {
     echo "检测架构: ${PLATFORM}"
 }
 
-# 获取线上frp最新版本与frps下载链接，默认选项2官方源
 get_frp_info() {
     echo "----------------------------------------"
     echo "请选择下载区域："
-    echo "1) 国内(github proxy镜像)"
-    echo "2) 国外(github官方，默认)"
-    read -p "输入选项 [1/2] (默认2): " area
-    area=${area:-2}
+    echo "1) 国内(github proxy镜像，默认)"
+    echo "2) 国外(github官方)"
+    read -p "输入选项 [1/2] (默认1): " area
+    area=${area:-1}
 
     API_RAW="https://api.github.com/repos/fatedier/frp/releases/latest"
     if [[ "${area}" == "1" ]];then
@@ -149,7 +144,6 @@ get_frp_info() {
     echo "下载链接: ${DL_URL}"
 }
 
-# 下载解压frps二进制，gzip头校验
 download_frps() {
     mkdir -p ${INSTALL_DIR}
     TMP_FILE="/tmp/frp.tar.gz"
@@ -186,207 +180,206 @@ download_frps() {
     echo "frps二进制提取完成: ${FRPS_BIN}"
 }
 
-# 交互式生成frps.toml，增加认证模式选择 OIDC / Token，修复token缺少auth.method="token"
+download_404html() {
+    mkdir -p ${INSTALL_DIR}
+    RAW_404="https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/404.html"
+    RAW_404_PROXY="https://mirror.ghproxy.com/${RAW_404}"
+    echo "==> 下载404.html自定义错误页面..."
+    if command -v curl &>/dev/null; then
+        curl -sL -m 10 ${RAW_404_PROXY} -o ${CUSTOM_404}
+        if [ $? -ne 0 ]; then
+            echo "⚠️ ghproxy代理下载失败，尝试直接github源"
+            curl -sL -m 10 ${RAW_404} -o ${CUSTOM_404}
+        fi
+    else
+        wget -q -T 10 ${RAW_404_PROXY} -O ${CUSTOM_404}
+        if [ $? -ne 0 ]; then
+            echo "⚠️ ghproxy代理下载失败，尝试直接github源"
+            wget -q -T 10 ${RAW_404} -O ${CUSTOM_404}
+        fi
+    fi
+    if [ -f "${CUSTOM_404}" ] && [ -s "${CUSTOM_404}" ]; then
+        echo "✅ 404.html已保存: ${CUSTOM_404}"
+    else
+        echo "⚠️ 404.html下载失败，请手动放置文件到 ${CUSTOM_404}"
+    fi
+}
+
 gen_config() {
     read -p "是否现在交互式填写frps.toml服务端配置? [Y/n] " fillcfg
     fillcfg=${fillcfg:-Y}
     if [[ ! "${fillcfg}" =~ ^[Yy]$ ]];then
-        # 直接输出完整注释模板
         cat > ${FRPS_TOML} <<EOF
-# IPv6 的文字地址或主机名必须括在方括号中，例如“[::1]:80”、“[ipv6-host]:http”或“[ipv6-host%zone]:80”
-# 对于单个“bindAddr”字段，不需要方括号，例如“bindAddr = "::"”。
 bindAddr = "0.0.0.0"
 bindPort = 7000
-# 用于 kcp 协议的 udp 端口​​，可以与 'bindPort' 相同。
-# 如果未设置，则在 frps 中禁用 kcp。
 kcpBindPort = 7000
-
-# 如果要支持虚拟主机，必须设置监听的http端口（可选）
-# 注意：http端口和https端口可以与bindPort相同
 vhostHTTPPort = 80
 vhostHTTPSPort = 443
-
-# 在仪表板监听器中启用 golang pprof 处理程序。
-# 必须先设置仪表板端口
-webServer.pprofEnable = true
-
-# enablePrometheus 将在 /metrics api 中的 webServer 上导出 prometheus 指标。
-enablePrometheus = true
-
-# 控制台或真实日志文件路径，如 ./frps.log
 log.to = "./frps.log"
-# 跟踪、调试、信息、警告、错误（trace, debug, info, warn, error）
 log.level = "info"
 log.maxDays = 3
-# 当 log.to 是控制台时禁用日志颜色，默认为 false
 log.disablePrintColor = false
-
-# --------认证二选一，请取消对应注释-----------
-# OIDC认证
-# auth.method = "oidc"
-# auth.oidc.issuer = "https://oidc.afrp.net"
-# auth.oidc.audience = "afrp.net"
-
-# Token认证
+auth.method = "oidc"
+auth.oidc.issuer = "https://www.afrp.net"
+auth.oidc.audience = "afrp.net"
 # auth.method = "token"
-# auth.token = "your-token-here"
-
-# 配置 Web 服务器以启用 frps 的仪表板。
-# 仅当设置了 webServer.port 时，仪表板才可用。
+# auth.token = "afrp.net"
+allowPorts = [
+  { single = 80 },
+  { single = 443 },
+  { start = 10001, end = 60000 }
+]
 webServer.addr = "0.0.0.0"
 webServer.port = 7500
 webServer.user = "admin"
 webServer.password = "admin"
-# webServer.tls.certFile = "server.crt"
-# webServer.tls.keyFile = "server.key"
-# dashboard assets directory(only for debug mode)
-# webServer.assetsDir = "./static"
-
-# 每个客户端可使用的最大端口数，默认值为 0，表示无限制
-maxPortsPerClient = 0
-
-# 如果 subDomainHost 不为空，可以在 frpc 的配置文件中设置 type 为 http 或 https 时的 subdomain
-# 当 subdomain 为 test 时，路由使用的 host 为 test.frps.com
-# subDomainHost = "zwrt.de"
-
-# HTTP 请求的自定义 404 页面
-# custom404Page = "/home/index_self.html"
+webServer.pprofEnable = false
+transport.heartbeatTimeout = 90
+maxPortsPerClient = 10
+subDomainHost = "example.com"
+udpPacketSize = 1500
+natholeAnalysisDataReserveHours = 168
+transport.maxPoolCount = 5
+custom404Page = "/opt/frps/404.html"
 EOF
-        echo "已写入完整注释frps.toml模板，请手动选择认证方式取消注释"
+        echo "已写入默认frps.toml模板(默认OIDC认证)"
         echo "后续修改配置: vim ${FRPS_TOML}"
         return
     fi
 
-    echo "===== 选择认证模式 ====="
-    echo "1) OIDC 认证"
+    echo "===== 选择frps认证模式 ====="
+    echo "1) OIDC 认证(默认)"
     echo "2) Token 认证"
-    read -p "输入选项 [1/2]: " auth_mode
+    read -p "输入选项 [1/2] (默认1): " auth_mode
+    auth_mode=${auth_mode:-1}
 
-    echo "===== 填写frps基础参数 ====="
-    read -p "bindAddr(监听地址，默认0.0.0.0): " bindAddr
-    bindAddr=${bindAddr:-"0.0.0.0"}
+    cat > ${FRPS_TOML} <<EOF
+bindAddr = "0.0.0.0"
+bindPort = 7000
+kcpBindPort = 7000
+vhostHTTPPort = 80
+vhostHTTPSPort = 443
+log.to = "./frps.log"
+log.level = "info"
+log.maxDays = 3
+log.disablePrintColor = false
+EOF
 
-    while true; do
-        read -p "bindPort(客户端连接端口，必填，默认7000): " bindPort
-        bindPort=${bindPort:-7000}
-        [[ -n "${bindPort}" ]] && break
-        echo "❌ bindPort不能为空，请重新输入！"
-    done
-
-    read -p "kcpBindPort(KCP端口，回车同bindPort): " kcpBindPort
-    kcpBindPort=${kcpBindPort:-${bindPort}}
-
-    read -p "vhostHTTPPort(http虚拟主机端口，默认80): " vhostHTTPPort
-    vhostHTTPPort=${vhostHTTPPort:-80}
-
-    read -p "vhostHTTPSPort(https虚拟主机端口，默认443): " vhostHTTPSPort
-    vhostHTTPSPort=${vhostHTTPSPort:-443}
-
-    read -p "是否开启prometheus指标导出? [Y/n] " prom_enable
-    prom_enable=${prom_enable:-Y}
-
-    read -p "是否开启pprof性能调试? [Y/n] " pprof_enable
-    pprof_enable=${pprof_enable:-Y}
-
-    read -p "subDomainHost子域名后缀(可不填，回车跳过): " subDomainHost
-    read -p "custom404Page自定义404页面路径(可不填，回车跳过): " custom404Page
-    read -p "maxPortsPerClient单客户端最大端口数，0无限制(默认0): " maxPortsPerClient
-    maxPortsPerClient=${maxPortsPerClient:-0}
-
-    # 认证参数采集
     oidc_issuer=""
     oidc_audience=""
     auth_token=""
+    subDomainHost=""
+
     if [[ "${auth_mode}" == "1" ]];then
-        echo "----- OIDC认证参数 -----"
-        read -p "auth.oidc.issuer(例如 https://oidc.afrp.net): " oidc_issuer
-        read -p "auth.oidc.audience(例如 afrp.net): " oidc_audience
-    else
-        echo "----- Token认证参数 -----"
-        read -p "auth.token: " auth_token
-    fi
+        echo "----- OIDC认证参数配置 -----"
+        read -p "auth.oidc.issuer (默认https://www.afrp.net): " oidc_issuer
+        oidc_issuer=${oidc_issuer:-"https://www.afrp.net"}
+        read -p "auth.oidc.audience (默认afrp.net): " oidc_audience
+        oidc_audience=${oidc_audience:-"afrp.net"}
+        read -p "subDomainHost (默认example.com): " subDomainHost
+        subDomainHost=${subDomainHost:-"example.com"}
 
-    echo "----- 日志配置 -----"
-    read -p "log.to日志输出路径(默认./frps.log): " log_to
-    log_to=${log_to:-"./frps.log"}
-    read -p "log.level日志级别[trace/debug/info/warn/error]，默认info: " log_level
-    log_level=${log_level:-"info"}
-    read -p "log.maxDays日志保留天数，默认3: " log_maxDays
-    log_maxDays=${log_maxDays:-3}
-    read -p "log.disablePrintColor关闭控制台日志颜色? [Y/n] " log_discolor
-    log_discolor=${log_discolor:-n}
-
-    echo "----- Web面板配置 -----"
-    read -p "webServer.addr(面板监听地址，默认0.0.0.0): " web_addr
-    web_addr=${web_addr:-"0.0.0.0"}
-    read -p "webServer.port(面板端口，默认7500): " web_port
-    web_port=${web_port:-7500}
-    read -p "webServer.user(面板账号，默认admin): " web_user
-    web_user=${web_user:-"admin"}
-    read -p "webServer.password(面板密码，默认admin): " web_pass
-    web_pass=${web_pass:-"admin"}
-
-    # 写入toml基础部分
-    cat > ${FRPS_TOML} <<EOF
-bindAddr = "${bindAddr}"
-bindPort = ${bindPort}
-kcpBindPort = ${kcpBindPort}
-
-vhostHTTPPort = ${vhostHTTPPort}
-vhostHTTPSPort = ${vhostHTTPSPort}
-
-webServer.pprofEnable = ${pprof_enable^^}
-enablePrometheus = ${prom_enable^^}
-
-log.to = "${log_to}"
-log.level = "${log_level}"
-log.maxDays = ${log_maxDays}
-log.disablePrintColor = ${log_discolor^^}
-EOF
-
-    # 根据选择写入认证：选中的取消注释生效，另一种全部注释
-    if [[ "${auth_mode}" == "1" ]];then
-        # OIDC启用，token注释
 cat >> ${FRPS_TOML} <<AUTH
 auth.method = "oidc"
 auth.oidc.issuer = "${oidc_issuer}"
 auth.oidc.audience = "${oidc_audience}"
-
 # auth.method = "token"
-# auth.token = "your-token-here"
+# auth.token = "afrp.net"
 AUTH
     else
-        # Token启用，oidc注释；修复：增加 auth.method = "token"
+        echo "----- Token认证参数配置 -----"
+        read -p "auth.token (默认afrp.net): " auth_token
+        auth_token=${auth_token:-"afrp.net"}
+        read -p "subDomainHost (默认example.com): " subDomainHost
+        subDomainHost=${subDomainHost:-"example.com"}
+
 cat >> ${FRPS_TOML} <<AUTH
 auth.method = "token"
 auth.token = "${auth_token}"
-
 # auth.method = "oidc"
-# auth.oidc.issuer = "https://oidc.afrp.net"
+# auth.oidc.issuer = "https://www.afrp.net"
 # auth.oidc.audience = "afrp.net"
 AUTH
     fi
 
-    if [[ -n "${subDomainHost}" ]];then
-        echo "subDomainHost = \"${subDomainHost}\"" >> ${FRPS_TOML}
-    fi
-    if [[ -n "${custom404Page}" ]];then
-        echo "custom404Page = \"${custom404Page}\"" >> ${FRPS_TOML}
+    # 是否开启高级自定义选项，默认N
+    read -p "是否开启toml高级自定义选项? [Y/n] (默认N): " adv_opt
+    adv_opt=${adv_opt:-N}
+
+    # 先写入基础公共固定片段
+cat >> ${FRPS_TOML} <<BASE
+allowPorts = [
+  { single = 80 },
+  { single = 443 },
+  { start = 10001, end = 60000 }
+]
+webServer.addr = "0.0.0.0"
+webServer.port = 7500
+BASE
+
+    webUser="admin"
+    webPass="admin"
+    maxPorts="10"
+    maxPool="5"
+    heartbeat="90"
+    allowUsers=""
+    additionalTokens=""
+
+    if [[ "${adv_opt}" =~ ^[Yy]$ ]];then
+        echo ""
+        echo "========== 高级自定义配置 =========="
+        echo "提示：直接回车使用括号内默认值"
+        read -p "webServer.user (默认admin): " webUser
+        webUser=${webUser:-"admin"}
+        read -p "webServer.password (默认admin): " webPass
+        webPass=${webPass:-"admin"}
+        read -p "maxPortsPerClient (默认10): " maxPorts
+        maxPorts=${maxPorts:-"10"}
+        read -p "transport.maxPoolCount (默认5): " maxPool
+        maxPool=${maxPool:-"5"}
+        read -p "transport.heartbeatTimeout (默认90): " heartbeat
+        heartbeat=${heartbeat:-"90"}
+
+        if [[ "${auth_mode}" == "1" ]];then
+            echo "--- OIDC模式高级参数 ---"
+            read -p "allowUsers 允许用户名，多个逗号分隔(留空不设置): " allowUsers
+        else
+            echo "--- Token模式高级参数 ---"
+            read -p "allowUsers 允许用户名，多个逗号分隔(留空不设置): " allowUsers
+            read -p "additionalTokens 附加token，多个逗号分隔(留空不设置): " additionalTokens
+        fi
     fi
 
+    # 写入webserver剩余
 cat >> ${FRPS_TOML} <<WEB
-maxPortsPerClient = ${maxPortsPerClient}
-
-webServer.addr = "${web_addr}"
-webServer.port = ${web_port}
-webServer.user = "${web_user}"
-webServer.password = "${web_pass}"
+webServer.user = "${webUser}"
+webServer.password = "${webPass}"
+webServer.pprofEnable = false
+transport.heartbeatTimeout = ${heartbeat}
+maxPortsPerClient = ${maxPorts}
+subDomainHost = "${subDomainHost}"
+udpPacketSize = 1500
+natholeAnalysisDataReserveHours = 168
+transport.maxPoolCount = ${maxPool}
+custom404Page = "/opt/frps/404.html"
 WEB
 
-    echo "✅ 配置写入完成: ${FRPS_TOML}"
+    # 非空才写入allowUsers
+    if [[ -n "${allowUsers}" ]];then
+cat >> ${FRPS_TOML} <<AU
+allowUsers = [$(echo "\"${allowUsers}\"" | sed 's/,/","/g')]
+AU
+    fi
+    # token模式非空写入additionalTokens
+    if [[ "${auth_mode}" == "2" && -n "${additionalTokens}" ]];then
+cat >> ${FRPS_TOML} <<AT
+additionalTokens = [$(echo "\"${additionalTokens}\"" | sed 's/,/","/g')]
+AT
+    fi
+
+    echo "✅ frps.toml配置写入完成: ${FRPS_TOML}"
 }
 
-# 生成systemd service单元 + frps包装脚本（增加PID真实进程打印）
 install_service() {
 cat > ${SYSTEMD_UNIT} <<EOF
 [Unit]
@@ -395,6 +388,7 @@ After=network.target
 
 [Service]
 Type=simple
+WorkingDirectory=/opt/frps
 ExecStart=${FRPS_BIN} -c ${FRPS_TOML}
 Restart=on-failure
 RestartSec=5
@@ -404,7 +398,6 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
 
-# 包装脚本 /usr/local/bin/frps，增加获取真实PID
 cat > ${BIN_LINK} <<'SHELL'
 #!/bin/bash
 FRPS_BIN="/opt/frps/frps-bin"
@@ -521,7 +514,7 @@ action_install() {
             echo "✅ 当前frps已经是最新版本，跳过二进制下载"
         else
             [[ "${CURRENT_FRPS_VER}" == "unknown" ]] && echo "⚠️ 本地版本无法识别，对比失效，将询问是否升级"
-            read -p "发现新版本frp，是否升级frps二进制？[Y/n] " upgrade_ans
+            read -p "发现新版本frps，是否升级frps二进制？[Y/n] " upgrade_ans
             upgrade_ans=${upgrade_ans:-Y}
             if [[ "${upgrade_ans}" =~ ^[Yy]$ ]];then
                 echo "停止frps服务准备升级..."
@@ -537,13 +530,14 @@ action_install() {
         download_frps
     fi
 
-    # toml存在直接跳过配置向导
     if [[ ! -f "${FRPS_TOML}" ]];then
         echo "📄 frps.toml不存在，进入配置生成流程"
         gen_config
     else
         echo "✅ 已存在frps.toml，保留原有配置，跳过配置填写"
     fi
+
+    download_404html
 
     install_service
     echo "=============================================="
@@ -559,6 +553,7 @@ action_install() {
     echo "   frps config     编辑frps.toml"
     echo "   frps log        实时查看frps日志"
     echo "📄 配置文件：${FRPS_TOML}"
+    echo "📄 404错误页：${CUSTOM_404}"
     echo "💡 systemd原生命令示例：systemctl start frps"
     echo "💡 二进制本体调用：${FRPS_BIN} --version"
     echo "=============================================="
@@ -573,6 +568,7 @@ action_update() {
     echo "停止frps..."
     systemctl stop frps 2>/dev/null
     download_frps
+    download_404html
     systemctl daemon-reload
     systemctl start frps
     echo "✅ frps更新完成"
@@ -612,13 +608,12 @@ main() {
         *)
             echo "用法: sudo bash ${SCRIPT_NAME} [install|update|uninstall]"
             echo "  install    全新安装frps，已安装则检测版本更新；已有toml保留原有配置"
-            echo "  update     强制更新脚本和frps二进制，不改动toml配置"
+            echo "  update     强制更新脚本和frps二进制+404.html，不改动toml配置"
             echo "  uninstall  卸载frps，清理全部文件与systemd单元"
             exit 0
     esac
 }
 
-# 需要root权限
 if [[ $EUID -ne 0 ]];then
     echo "❌ 必须使用root/sudo执行本脚本！"
     exit 1
