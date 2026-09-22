@@ -108,8 +108,8 @@ get_arch() {
 get_frp_info() {
     echo "----------------------------------------"
     echo "请选择下载区域："
-    echo "1) 国内(github proxy镜像，默认)"
-    echo "2) 国外(github官方)"
+    echo "1) 国内(github proxy镜像)"
+    echo "2) 国外(github官方，默认)"
     read -p "输入选项 [1/2] (默认2): " area
     area=${area:-2}
 
