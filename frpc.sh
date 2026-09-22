@@ -177,12 +177,12 @@ user = "username"
 
 # --------认证二选一，请取消对应注释-----------
 # OIDC认证
-# auth.method = "oidc"
-# auth.oidc.clientID = "username"
-# auth.oidc.clientSecret = "secret"
-# auth.oidc.issuer = "https://oidc.afrp.net"
-# auth.oidc.audience = "afrp.net"
-# auth.oidc.scope = "afrp"
+auth.method = "oidc"
+auth.oidc.clientID = "username"
+auth.oidc.clientSecret = "secret"
+auth.oidc.issuer = "https://www.afrp.net"
+auth.oidc.audience = "afrp.net"
+auth.oidc.scope = "afrp"
 
 # Token认证
 # auth.method = "token"
@@ -239,7 +239,7 @@ EOF
             read -p "auth.oidc.clientID: " oidc_clientID
         fi
         read -p "auth.oidc.clientSecret: " oidc_clientSecret
-        read -p "auth.oidc.issuer(例如 https://oidc.afrp.net): " oidc_issuer
+        read -p "auth.oidc.issuer(例如 https://www.afrp.net): " oidc_issuer
         read -p "auth.oidc.audience(例如 afrp.net): " oidc_audience
         read -p "auth.oidc.scope (默认afrp): " oidc_scope
         oidc_scope=${oidc_scope:-"afrp"}
@@ -274,7 +274,7 @@ auth.token = "${auth_token}"
 # auth.method = "oidc"
 # auth.oidc.clientID = "${frp_user}"
 # auth.oidc.clientSecret = "secret"
-# auth.oidc.issuer = "https://oidc.afrp.net"
+# auth.oidc.issuer = "https://www.afrp.net"
 # auth.oidc.audience = "afrp.net"
 # auth.oidc.scope = "afrp"
 AUTH
