@@ -19,7 +19,7 @@ curl -LO https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh && 
 
 **国内镜像源（国内服务器优先）**
 ```bash
-curl -LO https://shturl.cc/TBZFMWpdM0D-onekey/raw/master/frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
+curl -LO https://arelay.cn/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
 ```
 
 ## 📦 frps 服务端
@@ -35,7 +35,7 @@ curl -LO https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh && 
 
 **国内镜像源**
 ```bash
-curl -LO shturl.cc/YYafBwCF7UauEaHx9mcJ4bSw9WHQs17EjFQTyHmmfbD4s && chmod +x frps.sh && sudo bash frps.sh install
+curl -LO https://arelay.cn/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh && chmod +x frps.sh && sudo bash frps.sh install
 ```
 
 ## ⚡ 全局快捷命令（安装完成后直接使用，frps用法完全一致）
