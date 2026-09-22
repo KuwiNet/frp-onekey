@@ -1,11 +1,11 @@
 #!/bin/sh
 # OpenWrt procd frpc onekey install script
-# ScriptVersion=2.1.7
+# ScriptVersion=2.1.8
 # Install dir: /root/frp
 # Procd init: /etc/init.d/frpc
 # Real wrapper file: /usr/sbin/frpc-wrapper
 # Symlink: /usr/sbin/frpc  --> frpc-wrapper
-SCRIPT_VERSION="2.1.7"
+SCRIPT_VERSION="2.1.8"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -182,6 +182,7 @@ user = "username"
 # auth.oidc.clientSecret = "secret"
 # auth.oidc.issuer = "https://oidc.afrp.net"
 # auth.oidc.audience = "afrp.net"
+# auth.oidc.scope = "afrp"
 
 # Token认证
 # auth.method = "token"
@@ -226,6 +227,7 @@ EOF
     oidc_clientSecret=""
     oidc_issuer=""
     oidc_audience=""
+    oidc_scope=""
     auth_token=""
     if [ "${auth_mode}" = "1" ]; then
         echo "----- OIDC认证参数 -----"
@@ -239,6 +241,8 @@ EOF
         read -p "auth.oidc.clientSecret: " oidc_clientSecret
         read -p "auth.oidc.issuer(例如 https://oidc.afrp.net): " oidc_issuer
         read -p "auth.oidc.audience(例如 afrp.net): " oidc_audience
+        read -p "auth.oidc.scope (默认afrp): " oidc_scope
+        oidc_scope=${oidc_scope:-"afrp"}
     else
         echo "----- Token认证参数 -----"
         read -p "auth.token: " auth_token
@@ -257,6 +261,7 @@ auth.oidc.clientID = "${oidc_clientID}"
 auth.oidc.clientSecret = "${oidc_clientSecret}"
 auth.oidc.issuer = "${oidc_issuer}"
 auth.oidc.audience = "${oidc_audience}"
+auth.oidc.scope = "${oidc_scope}"
 
 # auth.method = "token"
 # auth.token = "your-token-here"
@@ -271,6 +276,7 @@ auth.token = "${auth_token}"
 # auth.oidc.clientSecret = "secret"
 # auth.oidc.issuer = "https://oidc.afrp.net"
 # auth.oidc.audience = "afrp.net"
+# auth.oidc.scope = "afrp"
 AUTH
     fi
 
@@ -336,7 +342,6 @@ AUTH
 }
 
 install_service() {
-# procd init脚本，respawn带参数，解决stop无限重启
 cat > ${INIT_FILE} <<'EOF'
 #!/bin/sh /etc/rc.common
 USE_PROCD=1
@@ -359,7 +364,6 @@ EOF
     chmod +x ${INIT_FILE}
     ${INIT_FILE} enable
 
-# 真实包装脚本本体文件名：frpc‑wrapper
 cat > ${WRAPPER_BIN} <<'SHELL'
 #!/bin/sh
 FRPC_BIN="/root/frp/frpc-bin"
@@ -452,8 +456,6 @@ log)
 esac
 SHELL
     chmod +x ${WRAPPER_BIN}
-
-    # 创建软链接 /usr/sbin/frpc 指向本体frpc‑wrapper
     rm -f ${SYMLINK_BIN}
     ln -s ${WRAPPER_BIN} ${SYMLINK_BIN}
 
