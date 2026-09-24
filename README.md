@@ -7,9 +7,9 @@
 > 上游官方项目：[fatedier/frp](https://github.com/fatedier/frp)
 
 ## 📦 frpc 客户端
-- 安装目录：`/opt/frp`
-- 二进制程序：`/opt/frp/frpc-bin`
-- 配置文件：`/opt/frp/frpc.toml`
+- 安装目录：`/opt/frpc`
+- 二进制程序：`/opt/frpc/frpc-bin`
+- 配置文件：`/opt/frpc/frpc.toml`
 - Systemd单元：`/etc/systemd/system/frpc.service`
 
 **国外 GitHub 源**
