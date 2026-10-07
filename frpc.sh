@@ -46,7 +46,7 @@ check_and_install_deps() {
 check_script_update() {
     echo "==> 检查脚本版本更新..."
     GITHUB_RAW="https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh"
-    PROXY_GH="https://mirror.ghproxy.com/${GITHUB_RAW}"
+    PROXY_GH="https://arelay.cn/${GITHUB_RAW}"
     REMOTE_RAW_URL=""
     REMOTE_VER=""
 
@@ -133,7 +133,7 @@ get_frp_info() {
         exit 1
     fi
     if [[ "${area}" == "1" ]];then
-        DL_URL="https://mirror.ghproxy.com/${DL_URL}"
+        DL_URL="https://arelay.cn/${DL_URL}"
     fi
     echo "线上最新frp版本: v${LATEST_FRPC_VER}"
     echo "下载链接: ${DL_URL}"
