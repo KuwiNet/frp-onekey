@@ -5,7 +5,7 @@
 # Systemd service: /etc/systemd/system/frps.service
 # Cmd: frps xxx
 
-SCRIPT_VERSION="2.2.8"
+SCRIPT_VERSION="2.3.0"
 SCRIPT_NAME="frps.sh"
 INSTALL_DIR="/opt/frps"
 FRPS_BIN="${INSTALL_DIR}/frps-bin"
@@ -47,7 +47,7 @@ check_and_install_deps() {
 check_script_update() {
     echo "==> 检查脚本版本更新..."
     GITHUB_RAW="https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh"
-    PROXY_GH="https://mirror.ghproxy.com/${GITHUB_RAW}"
+    PROXY_GH="https://arelay.cn/${GITHUB_RAW}"
     REMOTE_RAW_URL=""
     REMOTE_VER=""
 
@@ -115,7 +115,7 @@ get_frp_info() {
 
     API_RAW="https://api.github.com/repos/fatedier/frp/releases/latest"
     if [[ "${area}" == "1" ]];then
-        API_RAW="https://mirror.ghproxy.com/${API_RAW}"
+        API_RAW="https://arelay.cn/${API_RAW}"
     fi
 
     echo "获取frp最新版本信息..."
@@ -134,7 +134,7 @@ get_frp_info() {
         exit 1
     fi
     if [[ "${area}" == "1" ]];then
-        DL_URL="https://mirror.ghproxy.com/${DL_URL}"
+        DL_URL="https://arelay.cn/${DL_URL}"
     fi
     echo "线上最新frp版本: v${LATEST_FRPS_VER}"
     echo "下载链接: ${DL_URL}"
