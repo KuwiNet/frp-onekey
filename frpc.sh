@@ -5,7 +5,7 @@
 # Systemd service: /etc/systemd/system/frpc.service
 # Cmd: frpc xxx
 
-SCRIPT_VERSION="2.2.5"
+SCRIPT_VERSION="2.2.6"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/opt/frpc"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -114,7 +114,7 @@ get_frp_info() {
 
     API_RAW="https://api.github.com/repos/fatedier/frp/releases/latest"
     if [[ "${area}" == "1" ]];then
-        API_RAW="https://mirror.ghproxy.com/${API_RAW}"
+        API_RAW="https://arelay.cn/${API_RAW}"
     fi
 
     echo "获取frp最新版本信息..."
