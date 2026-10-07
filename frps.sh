@@ -179,7 +179,7 @@ download_frps() {
 download_404html() {
     mkdir -p ${INSTALL_DIR}
     RAW_404="https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/404.html"
-    RAW_404_PROXY="https://mirror.ghproxy.com/${RAW_404}"
+    RAW_404_PROXY="https://arelay.cn/${RAW_404}"
     echo "==> 下载404.html自定义错误页面..."
     if command -v curl &>/dev/null; then
         curl -sL -m 10 ${RAW_404_PROXY} -o ${CUSTOM_404}
