@@ -14,7 +14,7 @@
 
 **国外 GitHub 源**
 ```bash
-curl -LO https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
+curl -L https://frpc.afrp.net -o frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
 ```
 
 **国内镜像源（国内服务器优先）**
@@ -30,7 +30,7 @@ curl -LO https://arelay.cn/raw.githubusercontent.com/KuwiNet/frp-onekey/master/f
 
 **国外 GitHub 源**
 ```bash
-curl -LO https://raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh && chmod +x frps.sh && sudo bash frps.sh install
+curl -L https://frps.afrp.net -o frps.sh && chmod +x frps.sh && sudo bash frps.sh install
 ```
 
 **国内镜像源**
