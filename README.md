@@ -10,21 +10,25 @@
 
 ## 🌐 下载入口与加速说明
 
-脚本下载提供固定短链（301 跳转到 **https://oproxy.cc** 加速地址，国内外均可直达）：
+脚本下载提供固定短链（301 跳转到 **https://oproxy.cc** 加速地址，国内外均可直达），另提供 Gitee 镜像作为国内备用源：
 
-| 用途 | 短链 |
+| 用途 | 地址 |
 | --- | --- |
-| frpc 脚本 | https://frpc.afrp.net |
-| frps 脚本 | https://frps.afrp.net |
+| frpc 脚本（短链） | https://frpc.afrp.net |
+| frps 脚本（短链） | https://frps.afrp.net |
+| Gitee 镜像仓库 | https://gitee.com/kuwinet/frp-onekey |
 
-脚本内部所有 GitHub 资源（releases API、release 二进制）也统一走 **https://oproxy.cc** 加速，
-失败时自动回退 GitHub 官方直连，无需手动切换：
+脚本内部所有 GitHub 资源（releases API、release 二进制、脚本自更新）统一按
+**oproxy.cc → GitHub 官方 → Gitee 镜像** 顺序回退，无需手动切换：
 
 ```text
 https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh
 https://oproxy.cc/api.github.com/repos/fatedier/frp/releases/latest
 https://oproxy.cc/https://github.com/fatedier/frp/releases/download/v0.72.0/frp_0.72.0_linux_amd64.tar.gz
+https://gitee.com/kuwinet/frp-onekey/raw/master/frpc.sh
 ```
+
+> Gitee 仓库由 Gitee 的仓库镜像功能自动从 GitHub 同步，可能比 GitHub 略有延迟；frp 二进制本身仍从 GitHub Release 获取（Gitee 不托管 Release 资产）。
 
 ## 🧩 支持架构
 
@@ -56,6 +60,12 @@ https://oproxy.cc/https://github.com/fatedier/frp/releases/download/v0.72.0/frp_
 curl -L https://frpc.afrp.net -o frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
 ```
 
+> 国内网络访问不畅时，可改用 Gitee 镜像下载（与 GitHub 同源，内容一致）：
+>
+> ```bash
+> curl -L https://gitee.com/kuwinet/frp-onekey/raw/master/frpc.sh -o frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
+> ```
+
 ## 📦 frps 服务端
 
 - 安装目录：`/opt/frps`
@@ -68,6 +78,12 @@ curl -L https://frpc.afrp.net -o frpc.sh && chmod +x frpc.sh && sudo bash frpc.s
 ```bash
 curl -L https://frps.afrp.net -o frps.sh && chmod +x frps.sh && sudo bash frps.sh install
 ```
+
+> 国内备用（Gitee 镜像）：
+>
+> ```bash
+> curl -L https://gitee.com/kuwinet/frp-onekey/raw/master/frps.sh -o frps.sh && chmod +x frps.sh && sudo bash frps.sh install
+> ```
 
 > 也可以直接使用 Release 资产：`https://github.com/KuwiNet/frp-onekey/releases/latest`
 
@@ -116,7 +132,7 @@ journalctl -fu frpc
 
 ## ✨ 脚本特性
 
-- ✅ 加速源统一为 **oproxy.cc**，raw / api / release 三类地址全部走加速，失败自动回退 GitHub 官方直连
+- ✅ 加速源统一为 **oproxy.cc**，raw / api / release 三类地址全部走加速，失败自动回退 GitHub 官方直连，再退 **Gitee 镜像**
 - ✅ 脚本自更新：下载到临时文件后原子替换并自动重新执行，不会覆盖正在运行的脚本导致执行中断
 - ✅ `install`：检测到 toml 已存在，直接跳过配置向导，**不会覆盖用户配置**
 - ✅ `update`：仅更新二进制程序（frps 同时刷新 404.html），不改动任何 toml 配置
@@ -177,4 +193,5 @@ dnf install bsdmainutils
 
 ### 6. 加速域名打不开怎么办？
 
-脚本已内置自动回退：oproxy.cc 失败会自动改走 GitHub 官方直连；交互安装时也可以在选择下载区域时选 `2) 国外(GitHub 官方)`。
+脚本已内置自动回退：oproxy.cc 失败会自动改走 GitHub 官方直连，仍失败再退 Gitee 镜像；交互安装时也可以在选择下载区域时选 `2) 国外(GitHub 官方)`。
+完全没有 GitHub 访问能力时，可直接从 Gitee 镜像下载脚本：`https://gitee.com/kuwinet/frp-onekey/raw/master/frpc.sh`（frp 二进制需要能访问 GitHub Release 或其加速地址）。

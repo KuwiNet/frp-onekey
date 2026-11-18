@@ -203,6 +203,8 @@ jobs:
             echo 'wget https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/openwrt/frpc.sh -O frpc.sh'
             echo './frpc.sh install'
             echo '```'
+            echo ''
+            echo '> 国内备用源：Gitee 镜像 https://gitee.com/kuwinet/frp-onekey （自动从 GitHub 同步）'
             echo ""
             echo "### 资产"
             echo ""

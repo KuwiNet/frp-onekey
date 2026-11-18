@@ -7,8 +7,9 @@
 # Cmd: frpc xxx
 #
 # GitHub 文件加速：https://oproxy.cc （raw / api / release 资源均可加速）
+# Gitee 镜像：https://gitee.com/kuwinet/frp-onekey （国内脚本下载备用源）
 
-SCRIPT_VERSION="2.3.0"
+SCRIPT_VERSION="2.3.1"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/opt/frpc"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -19,6 +20,7 @@ BIN_LINK="/usr/bin/frpc"
 GH_REPO="KuwiNet/frp-onekey"
 GH_BRANCH="master"
 GH_RAW_BASE="https://raw.githubusercontent.com/${GH_REPO}/${GH_BRANCH}"
+GITEE_RAW_BASE="https://gitee.com/kuwinet/frp-onekey/raw/${GH_BRANCH}"
 PROXY_HOST="https://oproxy.cc"
 
 HAS_CURL=0
@@ -132,11 +134,12 @@ check_script_update() {
     echo "==> 检查脚本版本更新..."
     RAW_SELF="${GH_RAW_BASE}/${SCRIPT_NAME}"
     PROXY_SELF=$(proxy_url "${RAW_SELF}")
+    GITEE_SELF="${GITEE_RAW_BASE}/${SCRIPT_NAME}"
 
-    REMOTE_VER=$(fetch_first "${PROXY_SELF}" "${RAW_SELF}" | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
+    REMOTE_VER=$(fetch_first "${PROXY_SELF}" "${RAW_SELF}" "${GITEE_SELF}" | grep 'SCRIPT_VERSION=' | head -n1 | cut -d'"' -f2)
 
     if [[ -z "${REMOTE_VER}" ]];then
-        echo "⚠️ oproxy.cc 与 GitHub 均无法访问，跳过脚本版本检测"
+        echo "⚠️ oproxy.cc / GitHub / Gitee 均无法访问，跳过脚本版本检测"
         return 0
     fi
     if [[ "${REMOTE_VER}" == "${SCRIPT_VERSION}" ]];then
@@ -164,7 +167,7 @@ check_script_update() {
     # 先下载到临时文件再原子替换，避免覆盖正在被 bash 读取的脚本
     TMP_SELF=$(mktemp) || { echo "❌ 创建临时文件失败，跳过脚本更新"; return 0; }
     UPDATED=0
-    for url in "${PROXY_SELF}" "${RAW_SELF}";do
+    for url in "${PROXY_SELF}" "${RAW_SELF}" "${GITEE_SELF}";do
         if http_download "${url}" "${TMP_SELF}" && grep -q 'SCRIPT_VERSION=' "${TMP_SELF}";then
             UPDATED=1
             break
