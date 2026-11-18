@@ -164,17 +164,21 @@ def main():
     # 2) 创建或更新 Release
     rel = get_release_by_tag(args.repo, args.tag, args.token)
     if rel and rel.get("id"):
-        log("Release %s 已存在（id=%s），更新说明" % (args.tag, rel["id"]))
-        st, body = api(
-            "PATCH",
-            "/repos/%s/releases/%s" % (args.repo, rel["id"]),
-            params={"access_token": args.token},
-            fields={"tag_name": args.tag, "name": name, "body": notes, "prerelease": "true" if args.prerelease else "false"},
-        )
-        if st != 200:
-            log("::error::更新 Gitee Release 失败（HTTP %s）：%s" % (st, body))
-            return 1
         rid = rel["id"]
+        same = (rel.get("body") or "") == notes and (rel.get("name") or "") == name
+        if same:
+            log("Release %s 已存在且说明一致，跳过更新" % args.tag)
+        else:
+            log("Release %s 已存在（id=%s），更新说明" % (args.tag, rid))
+            st, body = api(
+                "PATCH",
+                "/repos/%s/releases/%s" % (args.repo, rid),
+                params={"access_token": args.token},
+                fields={"tag_name": args.tag, "name": name, "body": notes, "prerelease": "true" if args.prerelease else "false"},
+            )
+            if st != 200:
+                log("::error::更新 Gitee Release 失败（HTTP %s）：%s" % (st, body))
+                return 1
     else:
         log("创建 Gitee Release %s" % args.tag)
         st, body = api(
@@ -205,16 +209,27 @@ def main():
         if os.path.isfile(os.path.join(args.assets_dir, fn))
     )
     existing = list_assets(args.repo, rid, args.token)
+    exist_map = {}
     for a in existing:
-        aname = (a or {}).get("name")
-        aid = (a or {}).get("id")
-        if aname in wanted and aid:
-            delete_asset(args.repo, rid, aid, args.token)
-            log("   已删除同名旧附件: %s" % aname)
+        if not isinstance(a, dict):
+            continue
+        name_a = a.get("name")
+        if name_a:
+            exist_map[name_a] = a
 
-    ok = 0
+    uploaded = 0
+    skipped = 0
     for fn in wanted:
         path = os.path.join(args.assets_dir, fn)
+        size = os.path.getsize(path)
+        old = exist_map.get(fn)
+        if old and old.get("size") == size:
+            skipped += 1
+            log("   = 附件已存在且大小一致，跳过: %s" % fn)
+            continue
+        if old and old.get("id"):
+            delete_asset(args.repo, rid, old["id"], args.token)
+            log("   已删除旧附件: %s" % fn)
         with open(path, "rb") as f:
             content = f.read()
         st, body = api(
@@ -225,13 +240,13 @@ def main():
             timeout=120,
         )
         if st in (200, 201):
-            ok += 1
+            uploaded += 1
             log("   ✅ 上传附件 %s（%d 字节）" % (fn, len(content)))
         else:
             log("::error::上传附件 %s 失败（HTTP %s）：%s" % (fn, st, body))
             return 1
 
-    log("🎉 Gitee Release %s 同步完成，共同步 %d 个附件" % (args.tag, ok))
+    log("🎉 Gitee Release %s 同步完成：新上传 %d 个，跳过 %d 个" % (args.tag, uploaded, skipped))
     return 0
 
 

@@ -155,6 +155,29 @@ journalctl -fu frpc
 
 > 脚本本身运行时始终拉取上游最新版本，因此多数情况下无需改动脚本逻辑，工作流只同步版本标记与发布产物。
 
+### Gitee 镜像发布
+
+同一个 Release 会同步发布到 Gitee（`https://gitee.com/kuwinet/frp-onekey`）：
+
+- 代码与 tag 由 **Gitee 仓库镜像功能**自动同步，工作流**不推代码**，因此不会与镜像同步冲突；
+- 工作流的独立 job `gitee-release` 只负责创建/更新 Gitee Release 并同步附件（`scripts/gitee_release.py`）；
+- 该 job 标记 `continue-on-error`，且未配置令牌时自动跳过 —— **Gitee 侧任何异常都不会影响 GitHub 的发布**；
+- 每天都会跑一次做自愈：上次因 tag 未同步而跳过时，下次自动补发；内容无变化时只读不写。
+
+启用方式（只需配置一次）：
+
+1. Gitee → 设置 → 私人令牌，生成令牌并勾选 `projects` 权限；
+2. GitHub 仓库 → Settings → Secrets and variables → Actions → 新建 Secret `GITEE_TOKEN`；
+3. 如需发布到别的 Gitee 仓库，再加仓库变量 `GITEE_REPO`（默认 `kuwinet/frp-onekey`）。
+
+本地手动补发：
+
+```bash
+GITEE_TOKEN=xxx python3 scripts/gitee_release.py \
+  --repo kuwinet/frp-onekey --tag v0.72.0 \
+  --notes-file release-notes.md --assets-dir ./assets
+```
+
 ## ❓ 常见问题
 
 ### 1. command not found: frpc

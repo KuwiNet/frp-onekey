@@ -250,10 +250,11 @@ jobs:
 
   # 把同一个 Release 镜像到 Gitee（只创建 Release + 同步附件，不推代码，
   # 代码与 tag 由 Gitee 的仓库镜像功能自动同步）。
+  # 每天都会跑一次做自愈：若上次因 tag 未同步而跳过，下次会自动补发；内容无变化时脚本只读不写。
   # 整个 job 标记 continue-on-error，任何 Gitee 侧问题都不会影响 GitHub 的发布结果。
   gitee-release:
     needs: sync
-    if: needs.sync.outputs.publish == 'true'
+    if: needs.sync.outputs.tag != ''
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
