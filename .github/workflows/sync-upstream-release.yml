@@ -294,6 +294,7 @@ jobs:
           VER: ${{ needs.sync.outputs.ver }}
         run: |
           set -uo pipefail
+          set +e
           python3 scripts/gitee_release.py \
             --repo "${GITEE_REPO}" \
             --tag "${TAG}" \

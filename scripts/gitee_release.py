@@ -33,19 +33,20 @@ def log(msg):
 def api(method, path, token=None, params=None, fields=None, files=None, timeout=60):
     """调用 Gitee OpenAPI v5。
 
-    files: [(field_name, filename, bytes)]，存在时使用 multipart/form-data。
+    params 统一拼在 URL 查询串上（Gitee 的 access_token 必须走查询参数）；
+    fields 以表单形式放在请求体；files 存在时改用 multipart/form-data。
     """
     url = API + path
     query = dict(params or {})
+    if token:
+        query.setdefault("access_token", token)
+    if query:
+        url += ("&" if "?" in url else "?") + urllib.parse.urlencode(query)
     headers = {"User-Agent": "frp-onekey-release-sync"}
 
     if files:
         boundary = "----frponekey" + uuid.uuid4().hex
         body = bytearray()
-        for k, v in query.items():
-            body += ("--%s\r\n" % boundary).encode()
-            body += ('Content-Disposition: form-data; name="%s"\r\n\r\n' % k).encode()
-            body += ("%s\r\n" % v).encode()
         for field, filename, content in files:
             ctype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
             body += ("--%s\r\n" % boundary).encode()
@@ -60,13 +61,13 @@ def api(method, path, token=None, params=None, fields=None, files=None, timeout=
         headers["Content-Type"] = "multipart/form-data; boundary=%s" % boundary
         data = bytes(body)
     elif fields:
-        data = urllib.parse.urlencode(fields).encode()
+        body_fields = dict(fields)
+        if token:
+            body_fields.setdefault("access_token", token)
+        data = urllib.parse.urlencode(body_fields).encode()
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     else:
         data = None
-
-    if method == "GET" and data is None and query:
-        url += "?" + urllib.parse.urlencode(query)
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
