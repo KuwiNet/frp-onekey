@@ -27,6 +27,11 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.up.outputs.tag }}
+      ver: ${{ steps.up.outputs.ver }}
+      publish: ${{ steps.need.outputs.publish }}
+      tag_exists: ${{ steps.need.outputs.tag_exists }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       UPSTREAM_REPO: fatedier/frp
@@ -241,4 +246,73 @@ jobs:
             echo "- 上游最新版本：\`${{ steps.up.outputs.tag }}\`"
             echo "- 需要发布：\`${{ steps.need.outputs.publish }}\`"
             echo "- tag 已存在：\`${{ steps.need.outputs.tag_exists }}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  # 把同一个 Release 镜像到 Gitee（只创建 Release + 同步附件，不推代码，
+  # 代码与 tag 由 Gitee 的仓库镜像功能自动同步）。
+  # 整个 job 标记 continue-on-error，任何 Gitee 侧问题都不会影响 GitHub 的发布结果。
+  gitee-release:
+    needs: sync
+    if: needs.sync.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      GITEE_REPO: ${{ vars.GITEE_REPO || 'kuwinet/frp-onekey' }}
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 检查 Gitee 令牌
+        id: gate
+        env:
+          TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          if [ -z "${TOKEN}" ]; then
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::未配置 GITEE_TOKEN，跳过 Gitee 发布（GitHub 发布不受影响）"
+          else
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: 下载 GitHub Release 资产与说明
+        if: steps.gate.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.sync.outputs.tag }}"
+          mkdir -p assets
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir assets --clobber
+          gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json body --jq '.body' > release-notes.md
+          ls -l assets
+
+      - name: 发布到 Gitee
+        if: steps.gate.outputs.available == 'true'
+        env:
+          TAG: ${{ needs.sync.outputs.tag }}
+          VER: ${{ needs.sync.outputs.ver }}
+        run: |
+          set -uo pipefail
+          python3 scripts/gitee_release.py \
+            --repo "${GITEE_REPO}" \
+            --tag "${TAG}" \
+            --name "frp ${VER} 一键脚本" \
+            --notes-file release-notes.md \
+            --assets-dir assets \
+            --token "${GITEE_TOKEN}" \
+            --wait-tag 900
+          rc=$?
+          if [ "${rc}" -ne 0 ]; then
+            echo "::warning::Gitee 发布未完成（rc=${rc}），已忽略，不影响 GitHub 发布"
+          fi
+
+      - name: Gitee 结果摘要
+        if: always()
+        run: |
+          {
+            echo ""
+            echo "### Gitee 镜像"
+            echo ""
+            echo "- 仓库：\`${GITEE_REPO}\`"
+            echo "- 令牌：\`${{ steps.gate.outputs.available }}\`（false 表示未配置 GITEE_TOKEN，本轮跳过）"
           } >> "${GITHUB_STEP_SUMMARY}"
