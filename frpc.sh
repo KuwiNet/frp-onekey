@@ -8,8 +8,9 @@
 # Symlink: /usr/sbin/frpc  --> frpc-wrapper
 #
 # GitHub 文件加速：https://oproxy.cc （raw / api / release 资源均可加速）
+# Gitee 镜像：https://gitee.com/kuwinet/frp-onekey （国内备用源）
 
-SCRIPT_VERSION="2.2.0"
+SCRIPT_VERSION="2.2.1"
 SCRIPT_NAME="frpc.sh"
 INSTALL_DIR="/root/frp"
 FRPC_BIN="${INSTALL_DIR}/frpc-bin"
@@ -21,7 +22,7 @@ SYMLINK_BIN="/usr/sbin/frpc"
 GH_REPO="KuwiNet/frp-onekey"
 GH_BRANCH="openwrt"
 GH_RAW_BASE="https://raw.githubusercontent.com/${GH_REPO}/${GH_BRANCH}"
-GITEE_RAW="https://shturl.cc/TBZFMWpdM0D-onekey/raw/${GH_BRANCH}/frpc.sh"
+GITEE_RAW="https://gitee.com/kuwinet/frp-onekey/raw/${GH_BRANCH}/frpc.sh"
 PROXY_HOST="https://oproxy.cc"
 
 HAS_CURL=0

@@ -11,7 +11,14 @@ Frp 是一个高性能的反向代理应用，可以帮助您轻松地进行内�
 
 #### 一、安装
 
-国内用户（默认走 oproxy.cc 加速，失败自动回退 GitHub 官方）：
+国内用户（Gitee 镜像，国内直连最快）：
+
+```shell
+wget https://gitee.com/kuwinet/frp-onekey/raw/openwrt/frpc.sh -O frpc.sh && chmod +x frpc.sh
+./frpc.sh install
+```
+
+国内用户（oproxy.cc 加速，失败自动回退 GitHub 官方）：
 
 ```shell
 wget https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/openwrt/frpc.sh -O frpc.sh && chmod +x frpc.sh
@@ -27,6 +34,7 @@ wget https://raw.githubusercontent.com/KuwiNet/frp-onekey/openwrt/frpc.sh -O frp
 
 > 脚本内所有 GitHub 资源（raw 脚本、releases API、release 二进制）均已统一走 oproxy.cc 加速，
 > 任一地址失败会自动切换下一个源（oproxy.cc → GitHub 官方 → Gitee 镜像），无需手动改链接。
+> Gitee 镜像由 Gitee 的仓库镜像功能自动从 GitHub 同步，Frp 二进制本身仍来自 GitHub Release。
 
 #### 二、修改 frpc 配置
 
