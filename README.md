@@ -12,14 +12,9 @@
 - 配置文件：`/opt/frpc/frpc.toml`
 - Systemd单元：`/etc/systemd/system/frpc.service`
 
-**国外 GitHub 源**
+**安装 frpc**
 ```bash
 curl -L https://frpc.afrp.net -o frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
-```
-
-**国内镜像源（国内服务器优先）**
-```bash
-curl -LO https://arelay.cn/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
 ```
 
 ## 📦 frps 服务端
@@ -28,14 +23,9 @@ curl -LO https://arelay.cn/raw.githubusercontent.com/KuwiNet/frp-onekey/master/f
 - 配置文件：`/opt/frps/frps.toml`
 - Systemd单元：`/etc/systemd/system/frps.service`
 
-**国外 GitHub 源**
+**安装 frps**
 ```bash
 curl -L https://frps.afrp.net -o frps.sh && chmod +x frps.sh && sudo bash frps.sh install
-```
-
-**国内镜像源**
-```bash
-curl -LO https://arelay.cn/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh && chmod +x frps.sh && sudo bash frps.sh install
 ```
 
 ## ⚡ 全局快捷命令（安装完成后直接使用，frps用法完全一致）
