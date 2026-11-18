@@ -1,0 +1,242 @@
+name: Sync upstream frp release
+
+# 自动跟随 fatedier/frp 上游版本：
+#   1. 读取上游最新 release 版本号
+#   2. 校验上游资产命名是否仍与脚本匹配（不匹配直接失败提醒）
+#   3. 同步脚本/README 中的版本标记并提交（必要时才改）
+#   4. 打与官方一致的 tag（如 v0.72.0）并发布 Release（附脚本资产 + 校验和）
+
+on:
+  schedule:
+    # 每天北京时间 05:10 检查一次
+    - cron: '10 21 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '同名 tag 已存在时也重新发布/更新 Release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-release
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      UPSTREAM_REPO: fatedier/frp
+      SUPPORTED_PLATFORMS: 'linux_amd64 linux_arm64 linux_arm linux_arm_hf linux_loong64 linux_mips linux_mipsle linux_mips64 linux_mips64le linux_riscv64'
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 读取上游最新版本
+        id: up
+        run: |
+          set -euo pipefail
+          TAG=""
+          for i in 1 2 3; do
+            TAG=$(gh api "repos/${UPSTREAM_REPO}/releases/latest" --jq '.tag_name' 2>/dev/null || true)
+            [ -n "${TAG}" ] && break
+            echo "第 ${i} 次获取上游版本失败，5 秒后重试"
+            sleep 5
+          done
+          if [ -z "${TAG}" ]; then
+            echo "::error::无法读取 ${UPSTREAM_REPO} 最新 release"
+            exit 1
+          fi
+          case "${TAG}" in v*) ;; *) TAG="v${TAG}" ;; esac
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "ver=${TAG#v}" >> "${GITHUB_OUTPUT}"
+          echo "上游最新版本：${TAG}"
+
+      - name: 校验上游资产命名与脚本兼容性
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.up.outputs.tag }}"
+          VER="${{ steps.up.outputs.ver }}"
+          gh api "repos/${UPSTREAM_REPO}/releases/tags/${TAG}" --jq '.assets[].name' | sort > assets.txt
+          MISSING=""
+          for p in ${SUPPORTED_PLATFORMS}; do
+            if ! grep -qx "frp_${VER}_${p}.tar.gz" assets.txt; then
+              MISSING="${MISSING} ${p}"
+            fi
+          done
+          if [ -n "${MISSING}" ]; then
+            echo "::error::上游 ${TAG} 缺少脚本支持的平台资产:${MISSING}"
+            echo "上游现有资产："; sed 's/^/  /' assets.txt
+            echo "脚本按 frp_<ver>_<platform>.tar.gz 规则匹配下载链接，命名规则变化需要同步修改脚本逻辑。"
+            exit 1
+          fi
+          echo "✅ 上游 ${TAG} 资产命名与脚本匹配（${SUPPORTED_PLATFORMS}）"
+
+      - name: 脚本语法检查
+        run: |
+          set -euo pipefail
+          bash -n frpc.sh
+          bash -n frps.sh
+          echo "✅ bash -n 通过"
+
+      - name: 判断是否需要发布
+        id: need
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.up.outputs.tag }}"
+          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q .; then
+            echo "tag_exists=true" >> "${GITHUB_OUTPUT}"
+            if [ "${{ github.event.inputs.force }}" = "true" ]; then
+              echo "publish=true" >> "${GITHUB_OUTPUT}"
+              echo "tag ${TAG} 已存在，本次强制刷新 Release 资产"
+            else
+              echo "publish=false" >> "${GITHUB_OUTPUT}"
+              echo "✅ 已存在 tag ${TAG}，跳过（无需重复发布）"
+            fi
+          else
+            echo "tag_exists=false" >> "${GITHUB_OUTPUT}"
+            echo "publish=true" >> "${GITHUB_OUTPUT}"
+            echo "发现新版本 ${TAG}，准备同步与发布"
+          fi
+
+      - name: 同步 master 版本标记
+        if: steps.need.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.up.outputs.tag }}"
+          git config user.name "KuwiNet"
+          git config user.email "darnycn@gmail.com"
+
+          for f in frpc.sh frps.sh; do
+            sed -i -E "s|^# Upstream-FRP-Version:.*|# Upstream-FRP-Version: ${TAG}|" "$f"
+            grep -q "^# Upstream-FRP-Version: ${TAG}$" "$f" || { echo "::error::${f} 版本标记写入失败"; exit 1; }
+          done
+          # README 中的 Release 示例链接与适配版本行
+          sed -i -E "s|^> 当前适配上游 frp 版本：.*|> 当前适配上游 frp 版本：**${TAG}**（由 GitHub Actions 自动跟随上游更新）|" README.md
+          sed -i -E "s|releases/download/v[0-9]+\.[0-9]+\.[0-9]+/frp_[0-9]+\.[0-9]+\.[0-9]+_linux_amd64|releases/download/${TAG}/frp_${{ steps.up.outputs.ver }}_linux_amd64|" README.md
+
+          bash -n frpc.sh && bash -n frps.sh
+          if git diff --quiet; then
+            echo "master 无需改动"
+          else
+            git diff --stat
+            git commit -am "chore: 同步上游 frp ${TAG} 版本标记"
+            git push origin HEAD:master
+            echo "✅ master 已提交"
+          fi
+
+      - name: 同步 openwrt 分支版本标记
+        if: steps.need.outputs.publish == 'true' && steps.need.outputs.tag_exists == 'false'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.up.outputs.tag }}"
+          git fetch origin openwrt:refs/remotes/origin/openwrt
+          git worktree add /tmp/ow-sync origin/openwrt
+          cd /tmp/ow-sync
+          git checkout -B openwrt origin/openwrt
+          git config user.name "KuwiNet"
+          git config user.email "darnycn@gmail.com"
+
+          sed -i -E "s|^# Upstream-FRP-Version:.*|# Upstream-FRP-Version: ${TAG}|" frpc.sh
+          grep -q "^# Upstream-FRP-Version: ${TAG}$" frpc.sh || { echo "::error::openwrt frpc.sh 版本标记写入失败"; exit 1; }
+          sed -i -E "s|^\* 当前适配上游 frp 版本：.*|* 当前适配上游 frp 版本：**${TAG}**（由 GitHub Actions 自动跟随上游更新）|" README.md
+
+          sh -n frpc.sh
+          if git diff --quiet; then
+            echo "openwrt 无需改动"
+          else
+            git commit -am "chore: 同步上游 frp ${TAG} 版本标记"
+            git push origin openwrt:openwrt
+            echo "✅ openwrt 已提交"
+          fi
+
+      - name: 准备发布资产
+        if: steps.need.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.up.outputs.tag }}"
+          mkdir -p dist
+          cp frpc.sh frps.sh 404.html dist/
+          git fetch origin openwrt:refs/remotes/origin/openwrt
+          git show origin/openwrt:frpc.sh > dist/frpc-openwrt.sh
+          chmod +x dist/*.sh
+          ( cd dist && sha256sum frpc.sh frps.sh frpc-openwrt.sh 404.html > checksums.txt )
+          cat dist/checksums.txt
+
+      - name: 打 tag 并发布 Release
+        if: steps.need.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.up.outputs.tag }}"
+          VER="${{ steps.up.outputs.ver }}"
+          TAG_EXISTS="${{ steps.need.outputs.tag_exists }}"
+
+          if [ "${TAG_EXISTS}" = "false" ]; then
+            git tag -a "${TAG}" -m "frp ${TAG} onekey scripts (systemd + openwrt)"
+            git push origin "refs/tags/${TAG}"
+            echo "✅ 已推送 tag ${TAG}"
+          fi
+
+          {
+            echo "## frp ${TAG} 一键脚本"
+            echo ""
+            echo "跟随上游 [fatedier/frp ${TAG}](https://github.com/${UPSTREAM_REPO}/releases/tag/${TAG}) 同步发布；脚本运行时自动拉取该版本二进制，无需手动指定版本号。"
+            echo ""
+            echo "### 安装"
+            echo ""
+            echo '```bash'
+            echo '# frpc 客户端（systemd）'
+            echo 'curl -L https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh -o frpc.sh'
+            echo 'sudo bash frpc.sh install'
+            echo ''
+            echo '# frps 服务端（systemd）'
+            echo 'curl -L https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh -o frps.sh'
+            echo 'sudo bash frps.sh install'
+            echo ''
+            echo '# OpenWrt（procd）'
+            echo 'wget https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/openwrt/frpc.sh -O frpc.sh'
+            echo './frpc.sh install'
+            echo '```'
+            echo ""
+            echo "### 资产"
+            echo ""
+            echo "| 文件 | 说明 |"
+            echo "| --- | --- |"
+            echo '| `frpc.sh` | systemd 版 frpc 客户端一键脚本 |'
+            echo '| `frps.sh` | systemd 版 frps 服务端一键脚本 |'
+            echo '| `frpc-openwrt.sh` | OpenWrt procd 版 frpc 脚本（同 openwrt 分支） |'
+            echo '| `404.html` | frps 自定义 404 页面 |'
+            echo '| `checksums.txt` | SHA256 校验和 |'
+            echo ""
+            echo "完整说明见 [README](https://github.com/KuwiNet/frp-onekey#readme)。"
+          } > release-notes.md
+
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${TAG} 已存在，刷新说明与资产"
+            gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --notes-file release-notes.md
+            gh release upload "${TAG}" dist/frpc.sh dist/frps.sh dist/frpc-openwrt.sh dist/404.html dist/checksums.txt \
+              --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "${TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "frp ${VER} 一键脚本" \
+              --notes-file release-notes.md \
+              dist/frpc.sh dist/frps.sh dist/frpc-openwrt.sh dist/404.html dist/checksums.txt
+          fi
+          echo "🎉 Release ${TAG} 发布完成"
+
+      - name: 结果摘要
+        run: |
+          {
+            echo "### 上游版本同步"
+            echo ""
+            echo "- 上游最新版本：\`${{ steps.up.outputs.tag }}\`"
+            echo "- 需要发布：\`${{ steps.need.outputs.publish }}\`"
+            echo "- tag 已存在：\`${{ steps.need.outputs.tag_exists }}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

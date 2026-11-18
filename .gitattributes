@@ -1,0 +1,5 @@
+# 脚本类文件强制 LF，避免在 Windows 上检出/提交时被转成 CRLF 导致 Linux / OpenWrt 执行报错
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.md   text eol=lf
+*.html text eol=lf
