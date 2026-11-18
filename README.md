@@ -8,9 +8,16 @@
 >
 > 当前适配上游 frp 版本：**v0.72.0**（由 GitHub Actions 自动跟随上游更新）
 
-## 🌐 国内加速（oproxy.cc）
+## 🌐 下载入口与加速说明
 
-脚本所有 GitHub 资源（raw 脚本、releases API、release 二进制）默认走 **https://oproxy.cc** 加速，
+脚本下载提供固定短链（301 跳转到 **https://oproxy.cc** 加速地址，国内外均可直达）：
+
+| 用途 | 短链 |
+| --- | --- |
+| frpc 脚本 | https://frpc.afrp.net |
+| frps 脚本 | https://frps.afrp.net |
+
+脚本内部所有 GitHub 资源（releases API、release 二进制）也统一走 **https://oproxy.cc** 加速，
 失败时自动回退 GitHub 官方直连，无需手动切换：
 
 ```text
@@ -46,7 +53,7 @@ https://oproxy.cc/https://github.com/fatedier/frp/releases/download/v0.72.0/frp_
 **安装 frpc**
 
 ```bash
-curl -L https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh -o frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
+curl -L https://frpc.afrp.net -o frpc.sh && chmod +x frpc.sh && sudo bash frpc.sh install
 ```
 
 ## 📦 frps 服务端
@@ -59,7 +66,7 @@ curl -L https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/master/fr
 **安装 frps**
 
 ```bash
-curl -L https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh -o frps.sh && chmod +x frps.sh && sudo bash frps.sh install
+curl -L https://frps.afrp.net -o frps.sh && chmod +x frps.sh && sudo bash frps.sh install
 ```
 
 > 也可以直接使用 Release 资产：`https://github.com/KuwiNet/frp-onekey/releases/latest`

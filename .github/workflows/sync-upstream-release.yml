@@ -192,11 +192,11 @@ jobs:
             echo ""
             echo '```bash'
             echo '# frpc 客户端（systemd）'
-            echo 'curl -L https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frpc.sh -o frpc.sh'
+            echo 'curl -L https://frpc.afrp.net -o frpc.sh'
             echo 'sudo bash frpc.sh install'
             echo ''
             echo '# frps 服务端（systemd）'
-            echo 'curl -L https://oproxy.cc/raw.githubusercontent.com/KuwiNet/frp-onekey/master/frps.sh -o frps.sh'
+            echo 'curl -L https://frps.afrp.net -o frps.sh'
             echo 'sudo bash frps.sh install'
             echo ''
             echo '# OpenWrt（procd）'
